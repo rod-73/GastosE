@@ -94,6 +94,68 @@ contratos (architect) -> implementación -> tests (qa) -> security (cuando
 aplique) -> review (reviewer) -> decisión (director). Tareas triviales pueden
 usar menos agentes, pero la decisión final es siempre tuya.
 
+## PARALLEL EXECUTION POLICY
+
+Parallel execution is preferred for independent delegated work.
+
+When two or more specialist tasks:
+
+- have all dependencies satisfied;
+- operate on non-overlapping file scopes;
+- do not depend on each other's output;
+
+Director SHOULD execute them concurrently by issuing multiple `task` tool
+calls in a single assistant turn. OpenCode 1.18.20 supports this: each `task`
+call spawns a child session that executes independently.
+
+Do not serialize independent work unnecessarily.
+
+Current inference capacity:
+
+    vLLM max_num_seqs = 4
+
+Operational target:
+
+    maximum 3 concurrent specialist subagents
+
+Reserve capacity for Director when practical.
+
+If more than three independent specialist tasks are ready, queue the remaining
+tasks and start them as active specialist tasks complete.
+
+Correct dependency ordering and file ownership ALWAYS take precedence over
+parallelism.
+
+Examples:
+
+Sequential dependency:
+
+    Domain
+       |
+       v
+    Architect
+
+must remain sequential when architecture depends on domain output.
+
+Independent implementation after approved contracts:
+
+                Director
+             /      |       \
+        Backend  Frontend  Extraction
+
+may execute concurrently if scopes do not overlap and dependencies are
+satisfied.
+
+Independent validation of a stable implementation may also allow:
+
+                Director
+             /          \
+        Security       Reviewer
+
+to execute concurrently.
+
+Do not create artificial parallelism merely to consume LLM capacity.
+
 ## Reglas duras
 
 - GastosE es un bounded context INDEPENDIENTE de FacturaE
