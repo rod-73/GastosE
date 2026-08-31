@@ -1,0 +1,38 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "director",
+  "subagent_depth": 1,
+  "instructions": ["AGENTS.md"],
+  "plugin": [".opencode/plugin/tools.js"],
+  "permission": {
+    "read": {
+      "*": "allow",
+      "**/.env": "deny",
+      "**/.env.*": "deny",
+      "**/secrets/**": "deny",
+      "**/*.pem": "deny",
+      "**/*.key": "deny",
+      "**/credentials*": "deny"
+    },
+    "bash": {
+      "*": "ask",
+      "git push*": "deny",
+      "git push": "deny",
+      "git reset --hard*": "deny",
+      "git reset --hard": "deny",
+      "git clean -f*": "deny",
+      "rm -rf*": "deny",
+      "rm -fr*": "deny",
+      "cat **/.env*": "deny",
+      "head **/.env*": "deny",
+      "tail **/.env*": "deny",
+      "less **/.env*": "deny",
+      "git *": "allow"
+    },
+    "external_directory": {
+      "*": "deny",
+      "/tmp/opencode/*": "allow",
+      "/home/opencode/.local/share/opencode/tool-output/*": "allow"
+    }
+  }
+}
