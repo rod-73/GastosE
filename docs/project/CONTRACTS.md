@@ -1,7 +1,7 @@
 # CONTRACTS — Registro de contratos (GastosE)
 
 Contratos entre componentes de GastosE y con sistemas externos.
-Fuente de verdad: `docs/api/` (aún vacío hasta Phase 1).
+Fuente de verdad: `docs/api/` (spec OpenAPI en `docs/api/openapi.yaml`).
 
 ## Externos
 
@@ -13,7 +13,12 @@ Fuente de verdad: `docs/api/` (aún vacío hasta Phase 1).
 
 | Contrato | Proveedor | Consumidor | Versión | Estado |
 |----------|-----------|------------|---------|--------|
-| (ninguno definido) | - | - | - | Se definirán en Phase 1 (architecture baseline) |
+| API pública GastosE (OpenAPI, `docs/api/openapi.yaml`) | GastosE (API) | Frontend / clientes | v1 | propuesto (PHASE1-002) |
+| Cola de trabajo de extracción (tabla de trabajo + claim atómico, ADR-0005) | Document Ingestion (API) | Worker de extracción | v1 | propuesto (PHASE1-002) |
+| Output de extracción (esquema estricto JSON, VR-SCHEMA-1; docs/architecture/03-flows.md §2) | Worker de extracción | Expense Core | v1 | propuesto (PHASE1-002) |
+| Valores extraídos (E3: confidence + provenance, INV-11) | Worker de extracción | Expense Core | v1 | propuesto (PHASE1-002) |
+| Documento fuente íntegro (fingerprint SHA-256 verificado) | Document store (C6) | Worker de extracción | v1 | propuesto (PHASE1-002) |
+| Modelo de persistencia conceptual (tablas, relaciones, invariantes, cola de trabajo) | GastosE (persistencia) | Todos los sub-contextos | v1 | propuesto (PHASE1-003) |
 
 ## Reglas
 
