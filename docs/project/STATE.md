@@ -41,6 +41,17 @@
   resueltas (D1/D8 por ADR-0008; D2/D3 por política configurable; D4..D7 por
   ADR-0009..0012).
 
+## Riesgos operativos pendientes
+
+- **Subagente `domain` no utilizable** (2026-09-01): el subagente `domain`
+  produce respuestas vacías o degenerativas (repetitivas/incoherentes) al
+  ejecutarse como child session en OpenCode. El fallo persiste incluso
+  utilizando temporalmente la configuración completa de `architect.md`, lo
+  que descarta la causa en las instrucciones de `domain.md`. La causa raíz
+  está asociada al agente/session/plumbing de OpenCode y todavía no está
+  determinada. Impacto: tareas que requieran el subagente `domain` no pueden
+  delegarse hasta que se resuelva.
+
 ## Decisiones del threat review (PHASE1-004) — estado
 
 | # | Decisión | Severidad | Estado |
