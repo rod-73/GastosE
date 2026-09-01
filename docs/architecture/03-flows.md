@@ -70,7 +70,7 @@ sequenceDiagram
     end
     W->>W: seleccionar método por cascada (FR-EXT-1)
     Note over W: 1. xml_schema (si formato xml)<br/>2. pdf_text_rules (si pdf_text)<br/>3. ocr (si pdf_scanned/image)<br/>4. vision_llm (último recurso)
-    W->>W: ejecutar método (timeouts, límites de memoria)
+    W->>W: ejecutar método (timeouts, límites de memoria; LLM vía ExtractionLLM, ADR-0010)
     W->>W: validar output contra esquema estricto (VR-SCHEMA-1)
     alt output no cumple esquema
         W->>DB: extracción failed (motivo: esquema) — NO se guardan valores
@@ -107,6 +107,10 @@ sequenceDiagram
 - **Contenido del documento = dato** (FR-REV-5): el texto/XML del documento
   se trata exclusivamente como dato de extracción; nunca como instrucción
   para el LLM. Ver 07-security-boundaries.md, sección 4.
+- **ExtractionLLM (ADR-0010)**: el LLM se invoca a través de la abstracción
+  `ExtractionLLM` (provider-neutral). El backend por defecto es local
+  (endpoint compatible con OpenAI). La elección local/external no modifica el
+  dominio, la API ni la cascada.
 - **Detección de duplicado por clave** (DUP-2/3): ocurre al completar la
   extracción, cuando hay proveedor, número, fecha e importe. No bloquea la
   extracción.

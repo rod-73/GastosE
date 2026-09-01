@@ -116,9 +116,26 @@ V7 (Auditoría) ──> todas las verticales (transversal)
 - **OQ-9 (D1)**: modelo de tenancy — **RESUELTA (ADR-0008)**: organización
   multi-usuario. Afecta a V8-S2 (authZ: usuario→organización, roles) y a
   todas las queries de aislamiento (`owner_id` = `organization_id`).
-- **OQ-1 (D2)**: umbral de confidence — afecta a V2-S1 (extracción) y V3-S2
-  (validación).
-- **OQ-10 (D3)**: retención — afecta a V7-S1 (auditoría) y V1-S1
-  (documentos).
+- **OQ-1 (D2)**: umbral de confidence — **RESUELTA (2026-09-01)**: política
+  configurable, no thresholds fijos; confidence ≠ aceptación automática.
+  Afecta a V2-S1 (extracción: asignar confidence + provenance) y V3-S2
+  (validación: aplicar política configurable). Calibración de thresholds con
+  corpus representativo: tarea de Phase 2, no bloqueante.
+- **OQ-10 (D3)**: retención — **RESUELTA (2026-09-01)**: sin purga automática
+  en V1; políticas configurables por org/tipo/estado; sin plazos legales
+  hardcoded. Afecta a V7-S1 (auditoría: sin purga) y V1-S1 (documentos:
+  metadata de retención).
+- **D4 (ADR-0009)**: autenticación — token opaco + sesión server-side en BD.
+  Afecta a V8-S1 (login/logout, sesiones, revocación) y V8-S2 (authZ por rol
+  + filtro `owner_id` derivado de la sesión).
+- **D5 (ADR-0010)**: ExtractionLLM — abstracción provider-neutral, backend
+  por defecto local. Afecta a V2-S1 (worker: ejecución del LLM vía
+  `ExtractionLLM`).
+- **D6 (ADR-0011)**: sandbox del worker — contenedor + límites cgroup +
+  network egress restringido. Afecta a V2-S1 (worker: ejecución con sandbox,
+  timeouts, límites) y al despliegue (docker-compose).
+- **D7 (ADR-0012)**: auditoría append-only — permisos + trigger; hash-chain no
+  es requisito de V1. Afecta a V7-S1 (registro de auditoría append-only).
 
 **Fin del backlog de vertical slices (PHASE1-006).**
+**Actualizado 2026-09-01: decisiones D2..D7 resueltas (PHASE2-000).**

@@ -10,6 +10,10 @@
 | [ADR-0006](../adr/ADR-0006-local-filesystem-document-store.md) | Los documentos fuente se almacenan en filesystem local en volumen dedicado, inmutable, por fingerprint | proposed | 2026-08-31 |
 | [ADR-0007](../adr/ADR-0007-no-internal-events-in-phase-1-2.md) | GastosE no introduce eventos internos en Phase 1/2 (acoplamiento directo por servicios de aplicación) | proposed | 2026-08-31 |
 | [ADR-0008](../adr/ADR-0008-organization-based-tenancy.md) | Modelo de tenancy por organización (multi-usuario); `owner_id` = `organization_id` | accepted | 2026-08-31 |
+| [ADR-0009](../adr/ADR-0009-authentication-and-session-revocation.md) | Autenticación con token opaco + sesión server-side en BD; revocación inmediata por usuario y organización | accepted | 2026-09-01 |
+| [ADR-0010](../adr/ADR-0010-extraction-llm-provider-abstraction.md) | Abstracción `ExtractionLLM` provider-neutral; backend por defecto local (endpoint compatible con OpenAI) | accepted | 2026-09-01 |
+| [ADR-0011](../adr/ADR-0011-extraction-worker-sandbox-and-resource-isolation.md) | Worker de extracción en contenedor con límites cgroup, no-root, seccomp, network egress restringido | accepted | 2026-09-01 |
+| [ADR-0012](../adr/ADR-0012-append-only-audit-log.md) | Registro de auditoría append-only protegido a nivel de persistencia (permisos + trigger); hash-chain no es requisito de V1 | accepted | 2026-09-01 |
 
 Formato de ADR: Title / Status / Context / Decision / Alternatives
 considered / Consequences. Un ADR por decisión importante; no inventar

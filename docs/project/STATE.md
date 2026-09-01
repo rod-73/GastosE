@@ -3,7 +3,7 @@
 - **Phase**: 1 — Requirements and Domain Discovery
 - **Milestone**: M1 — Baseline funcional, de arquitectura, de persistencia
   conceptual, de API y de seguridad (sin implementación)
-- **Updated**: 2026-08-31 (por director, al cerrar Phase 1 — PHASE1-006 ACCEPTED)
+- **Updated**: 2026-09-01 (por director, al cerrar decisiones D2..D7 — pre-Phase 2)
 
 ## Current architecture
 
@@ -37,21 +37,22 @@
 
 ## Blockers
 
-- Ninguno para Phase 1 (documentación). Para Phase 2, las decisiones D2..D8
-  del threat review son pendientes (D1/OQ-9 tenancy resuelta por ADR-0008).
+- Ninguno para Phase 2. Todas las decisiones D1..D8 del threat review están
+  resueltas (D1/D8 por ADR-0008; D2/D3 por política configurable; D4..D7 por
+  ADR-0009..0012).
 
-## Decisiones pendientes (del threat review PHASE1-004)
+## Decisiones del threat review (PHASE1-004) — estado
 
-| # | Decisión | Severidad |
-|---|----------|-----------|
-| D1 | OQ-9: modelo de tenancy — **RESUELTA (ADR-0008)**: organización multi-usuario | HIGH → resuelta |
-| D2 | OQ-1: umbral de confidence (y si varía por método) | MEDIUM |
-| D3 | OQ-10: retención de documentos y auditoría | MEDIUM |
-| D4 | Mecanismo de autenticación (JWT vs cookie) y política de revocación | MEDIUM |
-| D5 | Si se usa LLM externo (API) o local | MEDIUM |
-| D6 | Mecanismo de sandbox del worker (contenedor, límites) | MEDIUM |
-| D7 | Mecanismo de inmutabilidad del registro de auditoría | LOW |
-| D8 | Política de recursos compartidos (catálogos) por tenant — **RESUELTA (ADR-0008)**: por organización | LOW → resuelta |
+| # | Decisión | Severidad | Estado |
+|---|----------|-----------|--------|
+| D1 | OQ-9: modelo de tenancy | HIGH | **RESUELTA (ADR-0008)**: organización multi-usuario |
+| D2 | OQ-1: umbral de confidence | MEDIUM | **RESUELTA (2026-09-01)**: política configurable, no thresholds fijos; confidence ≠ aceptación automática; calibración con corpus en Phase 2 |
+| D3 | OQ-10: retención de documentos y auditoría | MEDIUM | **RESUELTA (2026-09-01)**: sin purga automática en V1; políticas configurables por org/tipo/estado; sin plazos legales hardcoded |
+| D4 | Mecanismo de autenticación y revocación | MEDIUM | **RESUELTA (ADR-0009)**: token opaco + sesión server-side en BD; revocación por usuario y organización |
+| D5 | LLM externo vs local | MEDIUM | **RESUELTA (ADR-0010)**: abstracción `ExtractionLLM` provider-neutral; backend por defecto local (endpoint compatible con OpenAI) |
+| D6 | Sandbox del worker | MEDIUM | **RESUELTA (ADR-0011)**: contenedor podman + límites cgroup + no-root + seccomp + network egress restringido |
+| D7 | Inmutabilidad del registro de auditoría | LOW | **RESUELTA (ADR-0012)**: append-only BD (permisos + trigger); hash-chain no es requisito de V1 |
+| D8 | Catálogos por tenant | LOW | **RESUELTA (ADR-0008)**: por organización |
 
 ## Condiciones de la revisión (PHASE1-005) — estado
 
@@ -76,8 +77,10 @@
   5. DIRECTOR -> consolidación, backlog de vertical slices, quality gate.
      [ACCEPTED — PHASE1-006]
 - Condiciones C1..C5 aplicadas (C1: ADR-0008, tenancy por organización).
-- Aceptación final de Phase 1 por el usuario: commit pendiente de
-  aprobación explícita (sin push ni remotos).
-- Tras la aprobación: decisiones D2..D8 (D1/OQ-9 resuelta por ADR-0008) y
-  arranque de Phase 2 (implementación por vertical slices, ver
-  docs/project/VERTICAL-SLICES.md).
+- Decisiones D2..D7 resueltas (2026-09-01): D2/D3 por política configurable
+  (OQ-1/OQ-10 actualizadas); D4..D7 por ADR-0009..0012.
+- Aceptación final de Phase 1 + cierre D2..D7 por el usuario: commit
+  pendiente de aprobación explícita (sin push ni remotos).
+- Tras la aprobación: arranque de Phase 2 (implementación por vertical
+  slices, ver docs/project/VERTICAL-SLICES.md). Primer slice: V1-S1
+  (ingesta de documentos).

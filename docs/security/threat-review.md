@@ -55,27 +55,30 @@
 
 **Gaps / riesgos**:
 
-- **G1 (MEDIUM)**: PDFs maliciosos (JavaScript/acciones, bombas de
-  descompresión, PDFs con miles de páginas). Se menciona "sandbox si es
-  posible" pero no se garantiza. El worker aísla parsers (ADR-0004), pero el
-  límite de memoria/tiempo por parser debe ser **obligatorio y medible**, no
-  opcional.
-- **G2 (MEDIUM)**: Imágenes con dimensiones extremas (decompression bomb) →
-  DoS en OCR. Se menciona "límites de dimensiones" pero sin valores concretos
-  ni política de sanitización definida.
+- **G1 (MEDIUM → RESUELTO, ADR-0011)**: PDFs maliciosos (JavaScript/acciones,
+  bombas de descompresión, PDFs con miles de páginas). El worker se ejecuta
+  en contenedor podman con límites cgroup (memoria, CPU, timeout por
+  operación/parser), no-root, seccomp, filesystem restringido, documento
+  fuente montado read-only. Los límites son configurables (NFR-9) y se
+  validan mediante pruebas en Phase 2.
+- **G2 (MEDIUM → RESUELTO, ADR-0011)**: Imágenes con dimensiones extremas
+  (decompression bomb) → DoS en OCR. Límite de dimensiones de imagen
+  (default 10.000 × 10.000 px, configurable) como parte del sandbox del
+  worker.
 - **G3 (LOW)**: El contrato OpenAPI no especifica explícitamente el
   `Content-Type` aceptado ni el límite de tamaño en la operación de subida
   (solo se declara en arquitectura). Debe fijarse en el contrato para que el
-  cliente/servidor lo aplique de forma consistente.
+  cliente/servidor lo aplique de forma consistente. — Pendiente Phase 2.
 
-**Recomendaciones**:
+**Recomendaciones** (estado 2026-09-01):
 
-- Fijar valores concretos de límites (páginas, dimensiones, profundidad) y
-  hacerlos configurables (NFR-9).
+- **RESUELTO (ADR-0011)**: valores de límites (páginas, dimensiones,
+  profundidad) documentados como defaults/candidatos iniciales, configurables
+  (NFR-9), a validar mediante pruebas en Phase 2.
 - Definir política de sanitización de imágenes y PDFs (stripping de
   JS/acciones) como requisito de Phase 2.
-- Asegurar que el worker ejecute parsers con **timeout + límite de memoria**
-  por diseño (no "si es posible").
+- **RESUELTO (ADR-0011)**: el worker ejecuta parsers con **timeout + límite
+  de memoria** por diseño (cgroup, no "si es posible").
 
 ## 3. Parsers
 
@@ -88,20 +91,23 @@
 
 **Gaps / riesgos**:
 
-- **G4 (MEDIUM)**: El aislamiento del worker (ADR-0004) es a nivel de
-  proceso, pero no se describe el mecanismo de sandbox (contenedor, seccomp,
-  límites cgroup). Un parser comprometido (p. e.g. librería de PDF con CVE)
-  podría escapar del proceso.
+- **G4 (MEDIUM → RESUELTO, ADR-0011)**: El aislamiento del worker es a nivel
+  de **contenedor podman** (kernel-level), con seccomp/AppArmor, usuario
+  no-root, filesystem restringido, documento fuente montado read-only. Un
+  parser comprometido no puede escapar del contenedor.
 - **G5 (LOW)**: Las dependencias de parsing (PDF, imagen, XML) deben ser
   **pinneadas y auditadas** (07-sec §9). No se prescribe aún el inventario de
-  dependencias; debe hacerse en Phase 2.
+  dependencias; debe hacerse en Phase 2. (El sandbox de ADR-0011 no
+  sustituye la auditoría de dependencias; la contiene.)
 
-**Recomendaciones**:
+**Recomendaciones** (estado 2026-09-01):
 
-- Especificar el mecanismo de sandbox del worker (p. e.g. contenedor con
-  límites de CPU/memoria/disco, sin red saliente) como requisito de Phase 2.
+- **RESUELTO (ADR-0011)**: mecanismo de sandbox del worker especificado:
+  contenedor podman con límites cgroup (CPU/memoria), no-root, seccomp,
+  filesystem restringido, network egress restringido al mínimo necesario
+  (endpoint ExtractionLLM + BD).
 - Inventario de dependencias de parsing con política de actualización y
-  auditoría de CVEs.
+  auditoría de CVEs — pendiente Phase 2.
 
 ## 4. OCR/LLM — trust boundary
 
@@ -123,25 +129,38 @@ VR-SCHEMA-1):
   puede ser inducido a producir valores **conformes al esquema pero
   incorrectos** (p. e.g. cambiar un importe dentro del rango válido). La
   mitigación principal es la **revisión humana** (FR-VAL-4) cuando la
-  confidence < umbral (OQ-1, por defecto 0.9).
-- **G7 (MEDIUM)**: El umbral de confidence (OQ-1) **no está decidido**. Si se
-  fija demasiado alto, se reduce la revisión humana y aumenta el riesgo de
-  aceptar valores inyectados. Si se fija demasiado bajo, se satura la
-  revisión.
-- **G8 (LOW)**: No se prescribe si el LLM se usa como servicio externo (API
-  key) o local. Si es externo, el contenido del documento sale del perímetro
-  → riesgo de confidencialidad (NFR-7) y dependencia de un tercero.
+  confidence < umbral. **RESUELTO (D2, 2026-09-01)**: la política de
+  confidence es configurable (no thresholds fijos); la confidence nunca
+  constituye por sí sola aceptación contable; debe combinarse con provenance,
+  validaciones determinísticas, reglas de negocio, estado del documento y
+  revisión humana cuando corresponda.
+- **G7 (MEDIUM → RESUELTO, D2)**: El umbral de confidence (OQ-1) es
+  **configurable** (NFR-9). No se adoptan thresholds numéricos fijos como
+  política definitiva. Los thresholds definitivos se calibrarán
+  posteriormente utilizando un corpus representativo de documentos reales.
+  Hasta entonces son configurables y no constituyen una decisión
+  arquitectónica irreversible.
+- **G8 (LOW → RESUELTO, ADR-0010)**: La abstracción `ExtractionLLM`
+  (provider-neutral) aísla la aplicación de cualquier proveedor concreto.
+  El backend por defecto es **local** (endpoint compatible con OpenAI). Los
+  proveedores externos son una alternativa configurable. Si se usa un
+  proveedor externo, el contenido del documento sale del perímetro → la
+  política de datos se define en el despliegue.
 
-**Recomendaciones**:
+**Recomendaciones** (estado 2026-09-01):
 
-- Decidir OQ-1 (umbral de confidence) **antes de Phase 2**, idealmente con
-  umbrales por método (XML > LLM).
-- Si se usa LLM externo, definir política de datos (qué se envía, cifrado,
-  DPA) y evaluar alternativa local.
+- **RESUELTO (D2)**: OQ-1 (umbral de confidence) resuelta: política
+  configurable, no thresholds fijos; confidence ≠ aceptación automática.
+  Calibración de thresholds con corpus representativo: tarea de Phase 2, no
+  bloqueante.
+- **RESUELTO (ADR-0010)**: LLM local por defecto (endpoint compatible con
+  OpenAI). Si se usa LLM externo, la política de datos (qué se envía,
+  cifrado, DPA) se define en el despliegue.
 - Considerar **validación cruzada** (p. e.g. comparar valores extraídos por
-  OCR con los del XML si existe) para reducir el riesgo de inyección.
+  OCR con los del XML si existe) para reducir el riesgo de inyección —
+  pendiente Phase 2.
 - Documentar el prompt de extracción como artefacto versionado y revisable
-  (no solo "fijo").
+  (no solo "fijo") — pendiente Phase 2.
 
 ## 5. AuthN / AuthZ
 
@@ -164,24 +183,31 @@ VR-SCHEMA-1):
   `owner_id` = `organization_id`; el filtro de propietario se aplica sobre la
   organización derivada de la sesión. Riesgo de IDOR mitigado siempre que el
   filtro por `owner_id` se aplique en la capa de persistencia (ver §6).
-- **G10 (MEDIUM)**: El mecanismo de autenticación (JWT vs cookie opaca)
-  **no está decidido** (se deja para Phase 2). Esto afecta a la gestión de
-  sesiones, revocación y expiración.
-- **G11 (LOW)**: No se describe la política de **revocación** de
-  tokens/sesiones (p. e.g. en cambio de contraseña o cierre de sesión).
-- **G12 (LOW)**: No se prescribe la política de **contraseñas** (longitud,
-  complejidad, hash) ni el mecanismo de recuperación de cuenta.
+- **G10 (MEDIUM → RESUELTO, ADR-0009)**: El mecanismo de autenticación es
+  **token opaco + sesión server-side persistida en BD**. El token es opaco
+  (no JWT); la sesión se persiste en la tabla `sessions` con expiración por
+  inactividad y absoluta, y revocación inmediata por usuario y por
+  organización.
+- **G11 (LOW → RESUELTO, ADR-0009)**: La política de **revocación** es
+  inmediata: cierre de sesión, cambio de contraseña, desactivación de
+  usuario, desactivación de organización.
+- **G12 (LOW → RESUELTO, ADR-0009)**: La política de **contraseñas** es hash
+  con algoritmo adaptativo (argon2id o bcrypt), longitud mínima configurable.
+  Recuperación de cuenta: fuera de scope de Phase 2 v1 (1 org + 1 usuario,
+  ADR-0008).
 
-**Recomendaciones**:
+**Recomendaciones** (estado 2026-09-01):
 
 - OQ-9 **resuelta (ADR-0008)**: el diseño de authZ debe implementar
   usuario→organización y roles dentro de la organización (ver G14).
-- Decidir el mecanismo de autenticación (JWT vs cookie) y la política de
-  revocación.
-- Definir política de contraseñas y recuperación de cuenta.
+- **RESUELTO (ADR-0009)**: mecanismo de autenticación (token opaco + sesión
+  server-side en BD) y política de revocación (inmediata por usuario y
+  organización).
+- **RESUELTO (ADR-0009)**: política de contraseñas (hash adaptativo,
+  longitud mínima configurable). Recuperación de cuenta: fuera de scope v1.
 - Asegurar que el filtro por owner/tenant se aplique **en la capa de
   persistencia** (no solo en la UI) y que haya tests de aislamiento
-  (criterio NFR-7).
+  (criterio NFR-7) — pendiente Phase 2 (V8-S2).
 
 ## 6. Aislamiento por usuario / tenant (OQ-9)
 
@@ -203,17 +229,21 @@ VR-SCHEMA-1):
   que no es admin global). El modelo actual de roles
   (reader/reviewer/approver/admin) debe reinterpretarse como **por
   organización** (atributo del usuario en su organización). Pendiente de
-  diseño en Phase 2 (V8-S2, authZ).
+  diseño en Phase 2 (V8-S2, authZ). **RESUELTO (ADR-0009)**: el rol se
+  almacena en la sesión y se actualiza si cambia (la siguiente petición
+  refleja el nuevo rol).
 - **G15 (LOW → RESUELTO, ADR-0008)**: los recursos compartidos (catálogos:
   `categories`, `payment_methods`, `tax_rates`, `suppliers`) son **por
   organización** (llevan `owner_id` = `organization_id`). `currencies` es
   global (ISO-4217).
 
-**Recomendaciones**:
+**Recomendaciones** (estado 2026-09-01):
 
 - OQ-9 **resuelta (ADR-0008)**: implementar el filtro por `owner_id`
-  (= `organization_id`) en la capa de persistencia y tests de aislamiento.
-- Rediseñar el modelo de roles para incluir roles **por organización** (G14).
+  (= `organization_id`) en la capa de persistencia y tests de aislamiento —
+  pendiente Phase 2 (V8-S2).
+- Rediseñar el modelo de roles para incluir roles **por organización** (G14)
+  — pendiente Phase 2 (V8-S2).
 - Política de recursos compartidos: **por organización** (G15, ADR-0008).
 
 ## 7. Secrets
@@ -235,10 +265,10 @@ VR-SCHEMA-1):
 - **G17 (LOW)**: No se describe la política de **rotación** (frecuencia,
   procedimiento).
 
-**Recomendaciones**:
+**Recomendaciones** (estado 2026-09-01):
 
-- Definir el mecanismo de secret manager en Phase 2.
-- Documentar la política de rotación de credenciales.
+- Definir el mecanismo de secret manager en Phase 2 — pendiente.
+- Documentar la política de rotación de credenciales — pendiente Phase 2.
 
 ## 8. Aislamiento de FacturaE (ADR-0001)
 
@@ -261,12 +291,12 @@ VR-SCHEMA-1):
   que falle si aparece una referencia a `/workspace/facturaE` en el
   código/config).
 
-**Recomendaciones**:
+**Recomendaciones** (estado 2026-09-01):
 
 - Automatizar la verificación de aislamiento (búsqueda de referencias) como
-  parte del quality gate.
+  parte del quality gate — pendiente Phase 2.
 - Añadir un test de aislamiento que falle si aparece una referencia a
-  FacturaE.
+  FacturaE — pendiente Phase 2.
 
 ## 9. Auditoría y logs
 
@@ -283,20 +313,27 @@ VR-SCHEMA-1):
 
 **Gaps / riesgos**:
 
-- **G20 (LOW)**: No se prescribe el **mecanismo de inmutabilidad** del
-  registro de auditoría (p. e.g. append-only a nivel de DB, hash chain, WORM
-  storage).
-- **G21 (LOW)**: No se describe la **retención** de la auditoría (OQ-10,
-  pendiente). Si hay obligación legal de retención (5-10 años), el diseño de
-  almacenamiento debe contemplarlo.
-- **G22 (LOW)**: No se prescribe el **acceso** al registro de auditoría
-  (quién puede consultarlo, si es solo admin).
+- **G20 (LOW → RESUELTO, ADR-0012)**: El **mecanismo de inmutabilidad** es
+  append-only a nivel de persistencia: INSERT permitido, SELECT permitido
+  según autorización, UPDATE prohibido, DELETE prohibido. Se aplica mediante
+  permisos de BD y/o trigger. Hash-chain NO es requisito de V1 (posible
+  hardening futuro).
+- **G21 (LOW → RESUELTO, D3/OQ-10)**: La **retención** de la auditoría es
+  indefinida en V1 (sin purga automática). Los `audit_events` no tendrán
+  eliminación automática en V1. Una futura política/job de purga deberá
+  respetar invariantes de trazabilidad, auditoría e integridad.
+- **G22 (LOW → RESUELTO, ADR-0012)**: El **acceso** al registro de auditoría
+  es solo lectura, restringido a roles autorizados (recomendado:
+  `admin`/`approver`).
 
-**Recomendaciones**:
+**Recomendaciones** (estado 2026-09-01):
 
-- Definir el mecanismo de inmutabilidad del registro de auditoría en Phase 2.
-- Decidir OQ-10 (retención) antes de Phase 2.
-- Definir la política de acceso al registro de auditoría.
+- **RESUELTO (ADR-0012)**: mecanismo de inmutabilidad del registro de
+  auditoría: append-only a nivel de persistencia (permisos + trigger).
+- **RESUELTO (D3/OQ-10)**: retención de la auditoría: indefinida en V1 (sin
+  purga automática).
+- **RESUELTO (ADR-0012)**: política de acceso al registro de auditoría: solo
+  lectura, restringido a roles autorizados (recomendado: `admin`/`approver`).
 
 ## 10. Riesgos residuales y recomendaciones
 
@@ -306,38 +343,56 @@ VR-SCHEMA-1):
    organización. Riesgo residual: implementación correcta del filtro por
    `owner_id` en todas las queries (tests de aislamiento).
 2. **Prompt injection indirecta** — MEDIUM. Mitigado por esquema estricto +
-   revisión humana, pero el umbral de confidence (OQ-1) no está decidido.
+   revisión humana. El umbral de confidence (OQ-1) es **configurable** (D2
+   resuelta); la calibración con corpus representativo es tarea de Phase 2.
 3. **Uploads maliciosos (DoS/RCE)** — MEDIUM. Mitigado por límites y
-   aislamiento del worker, pero el sandbox no está garantizado.
+   aislamiento del worker en contenedor (ADR-0011: sandbox con límites
+   cgroup, no-root, seccomp, network egress restringido).
 4. **Cifrado en reposo** — MEDIUM. Pendiente de Phase 2.
-5. **Mecanismo de autenticación no decidido** — MEDIUM. Afecta a la gestión
-   de sesiones y revocación.
+5. **Mecanismo de autenticación** — RESUELTO (ADR-0009): token opaco +
+   sesión server-side en BD con revocación inmediata.
 
-**Recomendaciones globales**:
+**Recomendaciones globales** (estado 2026-09-01):
 
-- **Decidir OQ-1 antes de Phase 2** (bloqueante). OQ-9 resuelta (ADR-0008).
-- **Decidir OQ-10 (retención)** antes de Phase 2.
-- **Especificar el sandbox del worker** (mecanismo, límites) como requisito
-  de Phase 2.
-- **Automatizar la verificación de aislamiento** de FacturaE (NFR-10).
-- **Definir el mecanismo de inmutabilidad** del registro de auditoría.
-- **Inventario de dependencias** de parsing con política de CVEs.
-- **Documentar el prompt de extracción** como artefacto versionado.
+- **OQ-1 (D2) resuelta**: política de confidence configurable; calibración
+  de thresholds con corpus representativo en Phase 2 (no bloqueante).
+- **OQ-10 (D3) resuelta**: sin purga automática en V1; políticas
+  configurables por org/tipo/estado.
+- **Sandbox del worker (D6) resuelto**: ADR-0011 (contenedor podman + límites
+  cgroup + no-root + seccomp + network egress restringido).
+- **Mecanismo de autenticación (D4) resuelto**: ADR-0009 (token opaco +
+  sesión server-side en BD).
+- **LLM (D5) resuelto**: ADR-0010 (abstracción `ExtractionLLM`
+  provider-neutral, backend local por defecto).
+- **Inmutabilidad de auditoría (D7) resuelta**: ADR-0012 (append-only BD con
+  permisos + trigger; hash-chain no es requisito de V1).
+- **Automatizar la verificación de aislamiento** de FacturaE (NFR-10) —
+  pendiente Phase 2.
+- **Inventario de dependencias** de parsing con política de CVEs — pendiente
+  Phase 2.
+- **Documentar el prompt de extracción** como artefacto versionado — pendiente
+  Phase 2.
 
 ## 11. Decisiones necesarias del director
 
 | # | Decisión | Impacto | Severidad |
 |---|---|---|---|
 | D1 | **OQ-9**: modelo de tenancy — **RESUELTO (ADR-0008)**: organización multi-usuario | Aislamiento de datos, modelo de roles, authZ | HIGH → resuelta |
-| D2 | **OQ-1**: umbral de confidence (y si varía por método) | Revisión humana, riesgo de prompt injection | MEDIUM |
-| D3 | **OQ-10**: retención de documentos y auditoría | Almacenamiento, cumplimiento legal | MEDIUM |
-| D4 | Mecanismo de autenticación (JWT vs cookie) y política de revocación | Gestión de sesiones, seguridad | MEDIUM |
-| D5 | Si se usa LLM externo (API) o local | Confidencialidad, dependencia de terceros | MEDIUM |
-| D6 | Mecanismo de sandbox del worker (contenedor, límites) | Aislamiento de parsers, DoS/RCE | MEDIUM |
-| D7 | Mecanismo de inmutabilidad del registro de auditoría | Trazabilidad, no repudio | LOW |
+| D2 | **OQ-1**: umbral de confidence (y si varía por método) — **RESUELTO (2026-09-01)**: política configurable, no thresholds fijos; confidence ≠ aceptación automática; calibración con corpus en Phase 2 | Revisión humana, riesgo de prompt injection | MEDIUM → resuelta |
+| D3 | **OQ-10**: retención de documentos y auditoría — **RESUELTO (2026-09-01)**: sin purga automática en V1; políticas configurables por org/tipo/estado; sin plazos legales hardcoded | Almacenamiento, cumplimiento legal | MEDIUM → resuelta |
+| D4 | Mecanismo de autenticación (JWT vs cookie) y política de revocación — **RESUELTO (ADR-0009)**: token opaco + sesión server-side en BD; revocación por usuario y organización | Gestión de sesiones, seguridad | MEDIUM → resuelta |
+| D5 | Si se usa LLM externo (API) o local — **RESUELTO (ADR-0010)**: abstracción `ExtractionLLM` provider-neutral; backend por defecto local (endpoint compatible con OpenAI) | Confidencialidad, dependencia de terceros | MEDIUM → resuelta |
+| D6 | Mecanismo de sandbox del worker (contenedor, límites) — **RESUELTO (ADR-0011)**: contenedor podman + límites cgroup + no-root + seccomp + network egress restringido | Aislamiento de parsers, DoS/RCE | MEDIUM → resuelta |
+| D7 | Mecanismo de inmutabilidad del registro de auditoría — **RESUELTO (ADR-0012)**: append-only BD (permisos + trigger); hash-chain no es requisito de V1 | Trazabilidad, no repudio | LOW → resuelta |
 | D8 | Política de recursos compartidos (catálogos) por tenant — **RESUELTO (ADR-0008)**: por organización | Catálogos por organización; `currencies` global | LOW → resuelta |
 
 **Fin del threat review (PHASE1-004).** No se han modificado ni creado
 archivos por el subagente security (read-only); este archivo es la
 materialización del informe por el director (condición C2 de la revisión
 PHASE1-005).
+
+**Actualización 2026-09-01 (PHASE2-000)**: decisiones D2..D7 resueltas.
+D2/D3 por política configurable (OQ-1/OQ-10 actualizadas); D4 por ADR-0009;
+D5 por ADR-0010; D6 por ADR-0011; D7 por ADR-0012. Gaps G1, G2, G4, G6, G7,
+G8, G10, G11, G12, G20, G21, G22 marcados como RESUELTO. Gaps pendientes
+para Phase 2: G3, G5, G14, G16, G17, G18, G19.

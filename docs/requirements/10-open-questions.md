@@ -8,9 +8,26 @@ en este baseline (para que el baseline sea usable) y la decisión pendiente.
 
 - **Pregunta**: ¿cuál es el umbral de confidence por debajo del cual un campo
   requiere revisión humana obligatoria?
-- **Por defecto en el baseline**: 0.9 (configurable, NFR-9).
-- **Decisión pendiente**: fijar el umbral inicial y si varía por método de
-  extracción (p. e.g. XML => umbral más alto, LLM => umbral más bajo).
+- **RESUELTA (2026-09-01, D2)**: la política de confidence es **configurable**
+  (NFR-9), puede diferenciarse por método de extracción y, cuando tenga
+  sentido, por campo. La confidence **nunca constituye por sí sola aceptación
+  contable**; debe combinarse con provenance (INV-11), validaciones
+  determinísticas (VR-xxx), reglas de negocio, estado del documento y revisión
+  humana cuando corresponda.
+  - **XML estructurado**: la confianza se apoya principalmente en estructura,
+    validación de esquema y provenance.
+  - **PDF/OCR**: se utiliza la confidence técnica del extractor/OCR cuando
+    está disponible.
+  - **LLM**: cualquier confidence generada por el LLM se considera una señal
+    auxiliar. No se asume que la confidence autodeclarada por un LLM está
+    calibrada. Un score alto del LLM no permite por sí mismo aceptar un hecho
+    contable.
+  - Los **thresholds numéricos definitivos** se calibrarán posteriormente
+    utilizando un corpus representativo de documentos reales. Hasta entonces
+    son configurables y no constituyen una decisión arquitectónica
+    irreversible.
+- **Decisión pendiente**: calibrar los thresholds numéricos con un corpus
+  representativo (tarea de Phase 2, no bloqueante para el arranque).
 
 ## OQ-2 — Política de splits de documento
 
@@ -88,10 +105,22 @@ en este baseline (para que el baseline sea usable) y la decisión pendiente.
 - **Pregunta**: ¿cuánto tiempo se conservan los documentos fuente y los
   registros de auditoría? ¿Hay obligación legal de retención (p. e.g. 5-10
   años para documentos fiscales)?
-- **Por defecto en el baseline**: conservación duradera (NFR-8), sin plazo
-  fijado.
-- **Decisión pendiente**: fijar el plazo de retención (legal y operativo) y
-  la política de purga (si la hay).
+- **RESUELTA (2026-09-01, D3)**:
+  - **No habrá purga automática en V1 / Phase 2**.
+  - Los documentos se conservan mientras no exista una política explícita de
+    eliminación aplicable.
+  - La arquitectura **debe permitir políticas configurables de retención** por:
+    organización, tipo documental, estado, y requisitos legales/políticas
+    aplicables.
+  - Los `audit_events` **no tendrán eliminación automática en V1**.
+  - La aplicación **no debe hardcodear plazos legales concretos** como regla
+    arquitectónica (la interpretación jurídica puede variar según tipo
+    documental, organización, legislación o evolución normativa).
+  - Una futura política/job de purga deberá respetar invariantes de
+    trazabilidad, auditoría e integridad (INV-10, NFR-1, INV-9).
+- **Decisión pendiente**: definir la política concreta de retención por
+  organización/tipo documental (tarea de configuración en Phase 2, no
+  bloqueante para el arranque).
 
 ## OQ-11 — Retenciones aplicables
 

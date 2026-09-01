@@ -41,9 +41,13 @@ flowchart LR
 ## 2. Autenticación y autorización (NFR-7)
 
 - **Autenticación obligatoria** en todos los endpoints (salvo health).
-  Mecanismo: sesiones/tokens con expiración y revocación (el detalle de
-  implementación — p. e.g. JWT u opaco — es de Phase 2; el contrato de API
-  usa el esquema `http` bearer o cookie de sesión, ver docs/api/README.md).
+  Mecanismo: **token opaco + sesión server-side en BD** (ADR-0009). El token
+  es opaco (no JWT); la sesión se persiste en la tabla `sessions` con
+  expiración por inactividad y absoluta, y revocación inmediata por usuario y
+  por organización. El `organization_id` se deriva de la sesión (ADR-0008);
+  nunca se confía en un `owner_id` proporcionado por el cliente. El contrato
+  de API usa el esquema `bearerAuth` con `bearerFormat: opaque`
+  (docs/api/openapi.yaml).
 - **Autorización por rol** (mínimo privilegio, NFR-7). Roles canónicos:
 
 | Rol | Permisos |

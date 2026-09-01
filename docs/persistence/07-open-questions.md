@@ -16,15 +16,19 @@ persistencia.
 
 ## PQ-2 — OQ-10: Retención de documentos y auditoría
 
-- **Pregunta**: ¿cuánto tiempo se conservan los documentos fuente y los
-  registros de auditoría? ¿Hay obligación legal de retención?
-- **Impacto en persistencia**: determina la política de purga y el
-  particionamiento de `audit_events`. Si hay retención legal (p. e.g. 5-10
-  años), la auditoría debe conservarse ese plazo.
-- **Por defecto en el baseline**: conservación duradera (NFR-8), sin plazo
-  fijado.
-- **Decisión pendiente**: fijar el plazo de retención (legal y operativo) y la
-  política de purga (si la hay).
+- **RESUELTA (2026-09-01, D3)**: sin purga automática en V1 / Phase 2. Los
+  documentos se conservan mientras no exista una política explícita de
+  eliminación. La arquitectura debe permitir políticas configurables de
+  retención por organización, tipo documental, estado y requisitos legales.
+  Los `audit_events` no tendrán eliminación automática en V1. No se
+  hardcodean plazos legales concretos.
+- **Impacto en persistencia**: no hay purga en V1 → no se necesita
+  particionamiento por fecha para purga (PQ-8 sigue abierto para rendimiento).
+  El diseño debe soportar futuras políticas de purga sin romper invariantes
+  (INV-10, NFR-1, INV-9).
+- **Decisión pendiente**: definir la política concreta de retención por
+  organización/tipo documental (tarea de configuración en Phase 2, no
+  bloqueante).
 
 ## PQ-3 — OQ-15: Formato de fecha canónico
 
@@ -126,12 +130,11 @@ persistencia.
 
 ## PQ-12 — Tabla `users`: ¿en scope de GastosE?
 
-- **Pregunta**: ¿la tabla `users` es parte del modelo de persistencia de
-  GastosE o se asume que existe (autenticación nativa)?
-- **Impacto en persistencia**: el modelo incluye `users` como tabla auxiliar
-  (autenticación nativa de GastosE, ver
-  `docs/architecture/07-security-boundaries.md`). Si la autenticación es
-  externa (IdP), `users` podría no existir en GastosE.
-- **Por defecto**: autenticación nativa de GastosE (Phase 1). `users` está en
-  el modelo.
-- **Decisión pendiente**: confirmar si la autenticación es nativa o externa.
+- **RESUELTA (2026-09-01, ADR-0009)**: la autenticación es **nativa de
+  GastosE** (token opaco + sesión server-side en BD). La tabla `users` es
+  parte del modelo de persistencia de GastosE. Se añade la tabla `sessions`
+  (token opaco, user_id, organization_id, role, expiración, revocación).
+- **Impacto en persistencia**: `users` y `sessions` son tablas de GastosE.
+  El `organization_id` se deriva de la sesión (nunca de un parámetro del
+  cliente).
+- **Decisión pendiente**: ninguna (resuelta por ADR-0009).

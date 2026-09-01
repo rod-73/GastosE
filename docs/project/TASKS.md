@@ -13,6 +13,7 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
 | PHASE1-004 | Threat review temprano (uploads, parsers, OCR/LLM, auth, aislamiento, secrets, FacturaE) | security | ACCEPTED | - | 2026-08-31 | Read-only; threat review completado (informe del subagente); revisado y aceptado por el director; 8 decisiones D1..D8 pendientes (ver docs/project/STATE.md) |
 | PHASE1-005 | Revisión independiente de la propuesta Phase 1 | reviewer | ACCEPTED | - | 2026-08-31 | Read-only; veredicto APROBADO CON CONDICIONES (5 condiciones C1..C5); revisado y aceptado por el director |
 | PHASE1-006 | Consolidación Phase 1 + backlog de vertical slices + quality gate | director | ACCEPTED | - | 2026-08-31 | Consolidación completada: threat review materializado (C2), C3/C4/C5 aplicados, backlog de vertical slices en docs/project/VERTICAL-SLICES.md, quality gate superado. C1 (OQ-9) resuelta: ADR-0008 (organización multi-usuario). Commit pendiente de aprobación explícita |
+| PHASE2-000 | Cierre de decisiones D2..D7 (pre-Phase 2) | director | ACCEPTED | - | 2026-09-01 | D2/D3: política configurable (OQ-1/OQ-10 actualizadas). D4: ADR-0009 (token opaco + sesión BD). D5: ADR-0010 (ExtractionLLM provider-neutral, local por defecto). D6: ADR-0011 (sandbox contenedor + cgroup + network egress restringido). D7: ADR-0012 (append-only BD, hash-chain no es requisito V1). Consistencia transversal verificada. Commit pendiente de aprobación explícita |
 
 ## Historial
 
@@ -59,7 +60,19 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
   (C5) enum ValidationOutcome corregido a [passed, failed, warning, corrected].
   Backlog de vertical slices definido en docs/project/VERTICAL-SLICES.md
   (8 verticales priorizadas). Quality gate de Phase 1 superado. C1 (OQ-9
-  tenancy) resuelta por el usuario: ADR-0008 (organización multi-usuario,
-  `owner_id` = `organization_id`); actualizados docs/requirements (OQ-9,
-  NFR-7), docs/persistence (01, 06, 07) y DECISIONS.md. Commit de Phase 1
-  pendiente de aprobación explícita del usuario.
+   tenancy) resuelta por el usuario: ADR-0008 (organización multi-usuario,
+   `owner_id` = `organization_id`); actualizados docs/requirements (OQ-9,
+   NFR-7), docs/persistence (01, 06, 07) y DECISIONS.md. Commit de Phase 1
+   pendiente de aprobación explícita del usuario.
+- 2026-09-01 — director: PHASE2-000 (cierre D2..D7) -> ACCEPTED. Decisiones
+  D2..D7 resueltas: D2 (OQ-1) y D3 (OQ-10) por política configurable
+  (actualizadas en docs/requirements/10-open-questions.md); D4 por ADR-0009
+  (token opaco + sesión server-side en BD, revocación por usuario y
+  organización); D5 por ADR-0010 (abstracción ExtractionLLM provider-neutral,
+  backend por defecto local); D6 por ADR-0011 (worker en contenedor con
+  límites cgroup, no-root, seccomp, network egress restringido); D7 por
+  ADR-0012 (append-only BD con permisos + trigger, hash-chain no es requisito
+  de V1). Actualizados: DECISIONS.md (ADR-0009..0012), CONTRACTS.md
+  (ExtractionLLM, sesiones), STATE.md (D2..D7 resueltas), TASKS.md.
+  Consistencia transversal verificada. Sin código de aplicación. Phase 2 no
+  iniciada. Commit pendiente de aprobación explícita del usuario.

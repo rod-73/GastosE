@@ -1495,9 +1495,12 @@ components:
       scheme: bearer
       bearerFormat: opaque
       description: >
-        Token de sesión autenticado. Autenticación obligatoria en todos los
-        endpoints (salvo /healthz). Autorización por rol (NFR-7): reader,
-        reviewer, approver, admin.
+        Token opaco de sesión (ADR-0009). La sesión es server-side,
+        persistida en BD. Autenticación obligatoria en todos los endpoints
+        (salvo /healthz). Autorización por rol (NFR-7): reader, reviewer,
+        approver, admin. El organization_id se deriva de la sesión
+        (ADR-0008); nunca se confía en un owner_id proporcionado por el
+        cliente.
   security:
     - bearerAuth: []
   parameters:
