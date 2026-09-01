@@ -43,14 +43,20 @@
 
 ## Riesgos operativos pendientes
 
-- **Subagente `domain` no utilizable** (2026-09-01): el subagente `domain`
-  produce respuestas vacías o degenerativas (repetitivas/incoherentes) al
-  ejecutarse como child session en OpenCode. El fallo persiste incluso
-  utilizando temporalmente la configuración completa de `architect.md`, lo
-  que descarta la causa en las instrucciones de `domain.md`. La causa raíz
-  está asociada al agente/session/plumbing de OpenCode y todavía no está
-  determinada. Impacto: tareas que requieran el subagente `domain` no pueden
-  delegarse hasta que se resuelva.
+- **Subagente `domain` NO DISPONIBLE temporalmente** (2026-09-01): el
+  subagente `domain` produce respuestas vacías o degenerativas
+  (repetitivas/incoherentes) al ejecutarse como child session en OpenCode.
+  El fallo persiste incluso utilizando temporalmente la configuración
+  completa de `architect.md`, lo que descarta la causa en las instrucciones
+  de `domain.md`. La causa raíz está asociada al agente/session/plumbing de
+  OpenCode y todavía no está determinada.
+
+  **Workaround operativo (no es una decisión arquitectónica permanente):**
+  las responsabilidades de análisis de dominio (requisitos, invariantes,
+  reglas, criterios de aceptación) serán asumidas temporalmente por
+  `architect` y/o `director` hasta que el subagente `domain` se resuelva.
+  No se cambia la arquitectura conceptual ni el ownership definitivo.
+  No se modifica ningún contrato funcional de GastosE.
 
 ## Decisiones del threat review (PHASE1-004) — estado
 
