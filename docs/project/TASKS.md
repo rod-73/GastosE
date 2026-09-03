@@ -14,6 +14,7 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
 | PHASE1-005 | Revisión independiente de la propuesta Phase 1 | reviewer | ACCEPTED | - | 2026-08-31 | Read-only; veredicto APROBADO CON CONDICIONES (5 condiciones C1..C5); revisado y aceptado por el director |
 | PHASE1-006 | Consolidación Phase 1 + backlog de vertical slices + quality gate | director | ACCEPTED | - | 2026-08-31 | Consolidación completada: threat review materializado (C2), C3/C4/C5 aplicados, backlog de vertical slices en docs/project/VERTICAL-SLICES.md, quality gate superado. C1 (OQ-9) resuelta: ADR-0008 (organización multi-usuario). Commit pendiente de aprobación explícita |
 | PHASE2-000 | Cierre de decisiones D2..D7 (pre-Phase 2) | director | ACCEPTED | - | 2026-09-01 | D2/D3: política configurable (OQ-1/OQ-10 actualizadas). D4: ADR-0009 (token opaco + sesión BD). D5: ADR-0010 (ExtractionLLM provider-neutral, local por defecto). D6: ADR-0011 (sandbox contenedor + cgroup + network egress restringido). D7: ADR-0012 (append-only BD, hash-chain no es requisito V1). Consistencia transversal verificada. Commit pendiente de aprobación explícita |
+| M1.2-001 | Endurecer infraestructura multiagente (delegación exclusiva del Director, steps=25, fail-fast, handoff, concurrencia máx. 2) | director | ACCEPTED | main | 2026-09-03 | ADR-0013. Cambios: opencode.json (agent.*.steps=25 + task: deny en 10 especialistas), .opencode/agent/*.md (frontmatter steps/task:deny + secciones fail-fast y handoff en 10 agentes), director.md (salvaguardas M1.2 + concurrencia 2 + domain no disponible), AGENTS.md, STATE/TASKS/DECISIONS. Validado: JSON válido, subagent_depth=1, especialistas sin delegación, steps efectivo, git diff --check limpio. Commit M1.2 creado (sin push). Phase 2 NO reanudada |
 
 ## Historial
 
@@ -74,5 +75,17 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
   ADR-0012 (append-only BD con permisos + trigger, hash-chain no es requisito
   de V1). Actualizados: DECISIONS.md (ADR-0009..0012), CONTRACTS.md
   (ExtractionLLM, sesiones), STATE.md (D2..D7 resueltas), TASKS.md.
-  Consistencia transversal verificada. Sin código de aplicación. Phase 2 no
-  iniciada. Commit pendiente de aprobación explícita del usuario.
+   Consistencia transversal verificada. Sin código de aplicación. Phase 2 no
+   iniciada. Commit pendiente de aprobación explícita del usuario.
+- 2026-09-03 — director: M1.2-001 (endurecimiento del runtime multiagente)
+  -> ACCEPTED. ADR-0013 registrado. Salvaguardas aplicadas: (1) delegación
+  exclusiva del Director: subagent_depth=1 + task: deny en los 10
+  especialistas (frontmatter + opencode.json); (2) límite duro de pasos
+  steps: 25 por especialista (mecanismo nativo; valor documentado en
+  ADR-0013); (3) política fail-fast común (prompts de los 10 especialistas +
+  director); (4) handoff estructurado (STATUS/ENTREGABLES/VALIDACION/
+  RIESGOS/AL_DIRECTOR); (5) concurrencia máxima 2 especialistas (política
+  del director); (6) domain NO DISPONIBLE temporalmente (no invocarlo).
+  Validación: opencode.json JSON válido, subagent_depth=1, especialistas sin
+  delegación, steps efectivo, git diff --check limpio. Commit M1.2 creado
+  (sin push). Phase 2 NO reanudada.

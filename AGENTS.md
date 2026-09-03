@@ -14,7 +14,13 @@ Este proyecto se desarrolla con una infraestructura multiagente de OpenCode:
   `domain`, `architect`, `database`, `backend`, `extraction`, `frontend`,
   `qa`, `security` (read-only), `reviewer` (read-only), `devops`.
 - Jerarquía estricta: USUARIO -> DIRECTOR -> especialistas. Los subagentes
-  no delegan en otros subagentes.
+  no delegan en otros subagentes: `subagent_depth=1` + `task: deny` en todos
+  los especialistas (control determinista, M1.2 / ADR-0013).
+- Salvaguardas de ejecución (M1.2): `steps: 25` por especialista (límite
+  duro nativo), política fail-fast (máx. 1 reintento con estrategia
+  distinta; 2 fallos equivalentes => STOP), handoff estructurado
+  (STATUS/ENTREGABLES/VALIDACION/RIESGOS/AL_DIRECTOR), máximo 2
+  especialistas concurrentes. `domain` NO DISPONIBLE temporalmente.
 
 ## Conocimiento y herramientas
 

@@ -4,6 +4,18 @@
   "subagent_depth": 1,
   "instructions": ["AGENTS.md"],
   "plugin": [".opencode/plugin/tools.js"],
+  "agent": {
+    "architect": { "steps": 25, "permission": { "task": "deny" } },
+    "database": { "steps": 25, "permission": { "task": "deny" } },
+    "backend": { "steps": 25, "permission": { "task": "deny" } },
+    "extraction": { "steps": 25, "permission": { "task": "deny" } },
+    "frontend": { "steps": 25, "permission": { "task": "deny" } },
+    "qa": { "steps": 25, "permission": { "task": "deny" } },
+    "security": { "steps": 25, "permission": { "task": "deny" } },
+    "reviewer": { "steps": 25, "permission": { "task": "deny" } },
+    "devops": { "steps": 25, "permission": { "task": "deny" } },
+    "domain": { "steps": 25, "permission": { "task": "deny" } }
+  },
   "permission": {
     "read": {
       "*": "allow",
