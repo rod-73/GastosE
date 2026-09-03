@@ -288,3 +288,7 @@ export default async () => {
     },
   };
 };
+
+// M1.3: Deterministic tool-loop circuit breaker
+// Imported separately to keep concerns isolated.
+// The circuit breaker plugin is registered via opencode.json plugin array.
