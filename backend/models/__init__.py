@@ -9,6 +9,7 @@ from backend.models.document import SourceDocument
 from backend.models.extraction import Extraction, ExtractedValue
 from backend.models.extraction_job import ExtractionJob
 from backend.models.idempotency_key import IdempotencyKey
+from backend.models.normalized_value import NormalizedValue
 from backend.models.organization import Organization
 from backend.models.session import Session
 from backend.models.user import User
@@ -20,6 +21,7 @@ __all__ = [
     "ExtractionJob",
     "ExtractedValue",
     "IdempotencyKey",
+    "NormalizedValue",
     "Organization",
     "Session",
     "SourceDocument",

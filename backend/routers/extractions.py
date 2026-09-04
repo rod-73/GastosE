@@ -1,9 +1,11 @@
-"""Extraction endpoints (V2-S2): retry, list, detail.
+"""Extraction and normalization endpoints (V2-S2 + V3-S1).
 
 - POST /api/v1/documents/{id}/extractions/retry: create a new extraction
   job if the previous failure is recoverable (FR-FST-2).
 - GET /api/v1/documents/{id}/extractions: list extractions for a document.
 - GET /api/v1/extractions/{id}: get a specific extraction with its values.
+- POST /api/v1/extractions/{id}/normalize: normalize extracted values (V3-S1).
+- GET /api/v1/extractions/{id}/normalized-values: list normalized values.
 """
 import uuid
 from typing import List, Optional
@@ -19,7 +21,9 @@ from backend.middleware.auth import get_session, require_role
 from backend.models.document import SourceDocument
 from backend.models.extraction import Extraction, ExtractedValue
 from backend.models.extraction_job import ExtractionJob
+from backend.models.normalized_value import NormalizedValue
 from backend.models.session import Session
+from backend.services import normalization_service
 from backend.utils import uuid7
 
 router = APIRouter(tags=["extractions"])
@@ -266,6 +270,210 @@ def _extraction_to_response(
                 raw_value=v.raw_value,
                 confidence=float(v.confidence),
                 provenance=v.provenance,
+                created_at=v.created_at.isoformat() if v.created_at else "",
+            )
+            for v in values
+        ],
+    )
+
+
+# --- V3-S1: Normalization schemas and endpoints ---
+
+
+class NormalizedValueResponse(BaseModel):
+    """A single normalized value."""
+
+    id: uuid.UUID
+    extracted_value_id: uuid.UUID
+    field: str
+    normalized_value: str
+    normalization_rule: str
+    created_at: str
+
+
+class NormalizeResponse(BaseModel):
+    """Response for the normalization endpoint."""
+
+    extraction_id: uuid.UUID
+    normalized_count: int
+    failed_count: int
+    document_state: str
+
+
+class NormalizedValuesListResponse(BaseModel):
+    """List of normalized values for an extraction."""
+
+    extraction_id: uuid.UUID
+    count: int
+    values: List[NormalizedValueResponse]
+
+
+@router.post(
+    "/api/v1/extractions/{extraction_id}/normalize",
+    response_model=NormalizeResponse,
+    dependencies=[Depends(require_role("reader"))],
+)
+def normalize_extraction(
+    extraction_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> NormalizeResponse:
+    """Normalize all extracted values for a completed extraction (V3-S1, N3).
+
+    Creates NormalizedValue records (E4) for each successfully normalized
+    field. If any field cannot be normalized, the document state is set
+    to 'uncertain'.
+
+    Precondition: the extraction must be in 'completed' state.
+    """
+    # Verify extraction exists and belongs to the caller.
+    extraction = (
+        db.execute(
+            select(Extraction).where(
+                Extraction.id == extraction_id,
+                Extraction.owner_id == session.organization_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if extraction is None:
+        raise NotFoundException("Extraction")
+
+    if extraction.state != "completed":
+        raise ConflictException(
+            f"Extraction is not in 'completed' state (current: {extraction.state}). "
+            "Normalization requires a completed extraction."
+        )
+
+    # Check if already normalized (idempotency).
+    existing_normalized = (
+        db.execute(
+            select(NormalizedValue).where(
+                NormalizedValue.extracted_value_id.in_(
+                    select(ExtractedValue.id).where(
+                        ExtractedValue.extraction_id == extraction_id
+                    )
+                )
+            ).limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    if existing_normalized is not None:
+        # Already normalized: return current state.
+        doc = (
+            db.execute(
+                select(SourceDocument).where(
+                    SourceDocument.id == extraction.document_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        count = (
+            db.execute(
+                select(NormalizedValue).where(
+                    NormalizedValue.extracted_value_id.in_(
+                        select(ExtractedValue.id).where(
+                            ExtractedValue.extraction_id == extraction_id
+                        )
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return NormalizeResponse(
+            extraction_id=extraction_id,
+            normalized_count=len(count),
+            failed_count=0,
+            document_state=doc.state if doc else "unknown",
+        )
+
+    # Execute normalization.
+    normalized_count, failed_count = normalization_service.normalize_extraction(
+        extraction_id=extraction_id,
+        owner_id=session.organization_id,
+        db=db,
+    )
+
+    # Update document state.
+    doc = (
+        db.execute(
+            select(SourceDocument).where(
+                SourceDocument.id == extraction.document_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if doc is not None:
+        if failed_count > 0:
+            doc.state = "uncertain"
+        else:
+            doc.state = "validated"  # Will be refined by V3-S2.
+        db.commit()
+
+    return NormalizeResponse(
+        extraction_id=extraction_id,
+        normalized_count=normalized_count,
+        failed_count=failed_count,
+        document_state=doc.state if doc else "unknown",
+    )
+
+
+@router.get(
+    "/api/v1/extractions/{extraction_id}/normalized-values",
+    response_model=NormalizedValuesListResponse,
+    dependencies=[Depends(require_role("reader"))],
+)
+def list_normalized_values(
+    extraction_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> NormalizedValuesListResponse:
+    """List all normalized values for an extraction."""
+    # Verify extraction exists and belongs to the caller.
+    extraction = (
+        db.execute(
+            select(Extraction).where(
+                Extraction.id == extraction_id,
+                Extraction.owner_id == session.organization_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if extraction is None:
+        raise NotFoundException("Extraction")
+
+    values = (
+        db.execute(
+            select(NormalizedValue)
+            .where(
+                NormalizedValue.extracted_value_id.in_(
+                    select(ExtractedValue.id).where(
+                        ExtractedValue.extraction_id == extraction_id
+                    )
+                )
+            )
+            .order_by(NormalizedValue.field.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+    return NormalizedValuesListResponse(
+        extraction_id=extraction_id,
+        count=len(values),
+        values=[
+            NormalizedValueResponse(
+                id=v.id,
+                extracted_value_id=v.extracted_value_id,
+                field=v.field,
+                normalized_value=v.normalized_value,
+                normalization_rule=v.normalization_rule,
                 created_at=v.created_at.isoformat() if v.created_at else "",
             )
             for v in values

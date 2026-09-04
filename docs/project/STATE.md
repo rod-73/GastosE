@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 completadas; V3-S1 pendiente)
+- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 completadas; V3-S2 pendiente)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V2-S2 implementada. Retry de extracción + listado/consulta de extracciones. 90 tests passing. Quality gate superado.)
+- **Updated**: 2026-09-04 (por director: V3-S1 implementada. Normalización determinística (currency, amount, date, NIF/CIF, VAT). 138 tests passing. Quality gate superado.)
 
 ## Current architecture
 
@@ -158,6 +158,12 @@
   (POST /documents/{id}/extractions/retry), listado
   (GET /documents/{id}/extractions), detalle
   (GET /extractions/{id}). 90 tests passing. Quality gate superado.
-- **Próximo paso**: V3-S1 (normalización determinística).
+- **V3-S1 COMPLETADA** (2026-09-04): normalización determinística
+  (POST /extractions/{id}/normalize, GET /extractions/{id}/normalized-values).
+  Migración 0004 (normalized_values E4). Normalización: currency (ISO-4217),
+  amount (decimal exacto), date (ISO-8601), NIF/CIF (check digit), VAT rate
+  (0/4/10/21). Provenance INV-10. Idempotencia. Aislamiento por org.
+  138 tests passing. Quality gate superado.
+- **Próximo paso**: V3-S2 (validación determinística VR rules).
 - Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 ACCEPTED.
+- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 ACCEPTED.
