@@ -4,8 +4,16 @@ Importing this package registers every model on ``Base.metadata`` so that
 ``Base.metadata.create_all`` / Alembic autogenerate see the full schema.
 """
 from backend.models.audit_event import AuditEvent
+from backend.models.catalog import (
+    Category,
+    Currency,
+    PaymentMethod,
+    Supplier,
+    TaxRate,
+)
 from backend.models.duplication import Duplication
 from backend.models.document import SourceDocument
+from backend.models.expense import Expense, ExpenseLine, TaxLine
 from backend.models.extraction import Extraction, ExtractedValue
 from backend.models.extraction_job import ExtractionJob
 from backend.models.idempotency_key import IdempotencyKey
@@ -17,15 +25,23 @@ from backend.models.validated_value import ValidatedValue
 
 __all__ = [
     "AuditEvent",
+    "Category",
+    "Currency",
     "Duplication",
+    "Expense",
+    "ExpenseLine",
     "Extraction",
     "ExtractionJob",
     "ExtractedValue",
     "IdempotencyKey",
     "NormalizedValue",
     "Organization",
+    "PaymentMethod",
     "Session",
     "SourceDocument",
+    "Supplier",
+    "TaxLine",
+    "TaxRate",
     "User",
     "ValidatedValue",
 ]

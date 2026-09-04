@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 completadas; V3-S3 pendiente)
+- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 completadas; V4-S1 pendiente)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V3-S2 implementada. Validación determinística (VR rules: arith, schema, norm, biz). 171 tests passing. Quality gate superado.)
+- **Updated**: 2026-09-04 (por director: V3-S3 implementada. Creación de gasto E6 a partir de valores validados. 182 tests passing. Quality gate superado.)
 
 ## Current architecture
 
@@ -171,6 +171,13 @@
   VR-BIZ-5/8/9 (moneda única, fecha coherente, importe razonable).
   Resultados: passed/failed/warning. Provenance INV-10. Idempotencia.
   Aislamiento por org. 171 tests passing. Quality gate superado.
-- **Próximo paso**: V3-S3 (creación de gasto E6 a partir de valores validados).
+- **V3-S3 COMPLETADA** (2026-09-04): creación de gasto E6 a partir de
+  valores validados (POST /extractions/{id}/expenses, GET /expenses/{id},
+  GET /expenses). Migración 0006 (expenses E6, expense_lines E7, tax_lines E8).
+  INV-1 (total == base + IVA - retenciones), INV-3 (document_id NOT NULL),
+  INV-13 (moneda única). Estado `draft`. Idempotencia. Aislamiento por org.
+  Modelos ORM para catálogos (Supplier, TaxRate, Currency, Category,
+  PaymentMethod) añadidos. 182 tests passing. Quality gate superado.
+- **Próximo paso**: V4-S1 (vista de revisión GET /expenses/{id}/review).
 - Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 ACCEPTED.
+- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 ACCEPTED.
