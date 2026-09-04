@@ -25,6 +25,7 @@ from backend.routers import audit as audit_router
 from backend.routers import catalogs as catalogs_router
 from backend.routers import duplications as duplications_router
 from backend.routers import review as review_router
+from backend.routers import sessions as sessions_router
 from backend.routers import suppliers as suppliers_router
 from backend.routers import worker as worker_router
 
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
     app.include_router(suppliers_router.router)
     app.include_router(catalogs_router.router)
     app.include_router(audit_router.router)
+    app.include_router(sessions_router.router)
 
     # Health endpoint (public, no auth).
     @app.get("/healthz", tags=["health"])
