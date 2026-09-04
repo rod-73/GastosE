@@ -21,6 +21,7 @@ from backend.routers import auth as auth_router
 from backend.routers import documents as documents_router
 from backend.routers import expenses as expenses_router
 from backend.routers import extractions as extractions_router
+from backend.routers import review as review_router
 from backend.routers import worker as worker_router
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,7 @@ def create_app() -> FastAPI:
     app.include_router(worker_router.router)
     app.include_router(extractions_router.router)
     app.include_router(expenses_router.router)
+    app.include_router(review_router.router)
 
     # Health endpoint (public, no auth).
     @app.get("/healthz", tags=["health"])

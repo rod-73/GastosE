@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 completadas; V4-S1 pendiente)
+- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 completadas; V5-S1 pendiente)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V3-S3 implementada. Creación de gasto E6 a partir de valores validados. 182 tests passing. Quality gate superado.)
+- **Updated**: 2026-09-04 (por director: V4-S1..S4 implementadas. Revisión, decisiones, aceptación, rechazo, anulación. 199 tests passing. Quality gate superado.)
 
 ## Current architecture
 
@@ -178,6 +178,14 @@
   INV-13 (moneda única). Estado `draft`. Idempotencia. Aislamiento por org.
   Modelos ORM para catálogos (Supplier, TaxRate, Currency, Category,
   PaymentMethod) añadidos. 182 tests passing. Quality gate superado.
-- **Próximo paso**: V4-S1 (vista de revisión GET /expenses/{id}/review).
+- **V4-S1..S4 COMPLETADAS** (2026-09-04): revisión, decisiones, aceptación,
+  rechazo, anulación (GET /expenses/{id}/review, POST /expenses/{id}/review/decisions,
+  POST /expenses/{id}/accept, POST /expenses/{id}/reject, POST /expenses/{id}/void).
+  Vista de cinco niveles (extraído, normalizado, validado, aceptado, documento).
+  Corrección manual auditada (E14, INV-7). Aceptación con revalidación INV-1
+  y bloqueo por duplicación probable (INV-6). Rechazo terminal. Anulación solo
+  de gastos accepted. Auditoría en todas las acciones (ADR-0012).
+  199 tests passing. Quality gate superado.
+- **Próximo paso**: V5-S1 (detección de duplicados por clave lógica).
 - Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 ACCEPTED.
+- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 ACCEPTED.

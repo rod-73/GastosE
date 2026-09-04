@@ -25,6 +25,7 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
 | V3S1-001 | Implementar V3-S1: normalización determinística (currency, amount, date, NIF/CIF, VAT) | director | ACCEPTED | main | 2026-09-04 | 2 endpoints: POST /extractions/{id}/normalize (normaliza valores extraídos, crea E4), GET /extractions/{id}/normalized-values (listado). Migración 0004 (normalized_values). Normalización: ISO-4217, decimal exacto, ISO-8601, NIF/CIF check digit, VAT 0/4/10/21. Provenance INV-10. Idempotencia. Aislamiento por org. 138 tests passing. Quality gate superado |
 | V3S2-001 | Implementar V3-S2: validación determinística (VR rules, E5 validated values) | director | ACCEPTED | main | 2026-09-04 | 2 endpoints: POST /extractions/{id}/validate (valida valores normalizados, crea E5), GET /extractions/{id}/validated-values (listado). Migración 0005 (validated_values). VR rules: ARITH-1, SCHEMA-2, NORM-1..4, BIZ-5/8/9. Resultados passed/failed/warning. Provenance INV-10. Idempotencia. Aislamiento por org. 171 tests passing. Quality gate superado |
 | V3S3-001 | Implementar V3-S3: creación de gasto E6 a partir de valores validados | director | ACCEPTED | main | 2026-09-04 | 3 endpoints: POST /extractions/{id}/expenses (crea E6+E7+E8), GET /expenses/{id} (detalle con líneas), GET /expenses (listado). Migración 0006 (expenses, expense_lines, tax_lines). INV-1, INV-3, INV-13. Estado draft. Idempotencia. Aislamiento por org. Modelos ORM catálogos (Supplier, TaxRate, Currency, Category, PaymentMethod). 182 tests passing. Quality gate superado |
+| V4S1-001 | Implementar V4-S1..S4: revisión, decisiones, aceptación, rechazo, anulación | director | ACCEPTED | main | 2026-09-04 | 5 endpoints: GET /expenses/{id}/review (vista cinco niveles), POST /expenses/{id}/review/decisions (confirm/correct/reject), POST /expenses/{id}/accept (revalidación + snapshot), POST /expenses/{id}/reject (terminal), POST /expenses/{id}/void (solo accepted). Corrección auditada (INV-7). Aceptación con INV-1 + bloqueo duplicación (INV-6). Auditoría ADR-0012. 199 tests passing. Quality gate superado |
 
 ## Historial
 
@@ -124,3 +125,13 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
    network_mode none -> red dedicada con firewall, audit-events reader ->
    approver, propagación de rol G14, rate limiting nota). Permisos de
    agentes actualizados (.opencode/agent/*.md). Checkpoint commit pendiente.
+- 2026-09-04 — director: V4S1-001 (V4-S1..S4: revisión, decisiones,
+   aceptación, rechazo, anulación) -> ACCEPTED. 5 endpoints:
+   GET /expenses/{id}/review (vista cinco niveles: extraído, normalizado,
+   validado, aceptado, documento fuente), POST /expenses/{id}/review/decisions
+   (confirm/correct/reject por campo, corrección auditada INV-7),
+   POST /expenses/{id}/accept (revalidación INV-1, bloqueo por duplicación
+   probable INV-6, snapshot inmutable INV-14), POST /expenses/{id}/reject
+   (terminal, motivo obligatorio), POST /expenses/{id}/void (solo accepted,
+   motivo obligatorio). Auditoría en todas las acciones (ADR-0012).
+   Aislamiento por org. 199 tests passing. Quality gate superado.
