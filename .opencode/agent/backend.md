@@ -10,6 +10,7 @@ permission:
     "tests/**": "allow"
     "docs/api/**": "allow"
     "docs/project/**": "allow"
+    "docs/design/api/**": "allow"
   bash:
     "*": "deny"
     "git status*": "allow"

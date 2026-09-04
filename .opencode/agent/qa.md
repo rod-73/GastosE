@@ -8,6 +8,7 @@ permission:
     "*": "deny"
     "tests/**": "allow"
     "docs/project/**": "allow"
+    "docs/design/testing/**": "allow"
   bash:
     "*": "deny"
     "git status*": "allow"

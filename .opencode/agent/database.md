@@ -11,6 +11,7 @@ permission:
     "alembic.ini": "allow"
     "tests/**": "allow"
     "docs/project/**": "allow"
+    "docs/design/persistence/**": "allow"
   bash:
     "*": "deny"
     "git status*": "allow"

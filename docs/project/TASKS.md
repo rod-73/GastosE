@@ -17,6 +17,7 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
 | M1.2-001 | Endurecer infraestructura multiagente (delegación exclusiva del Director, steps=25, fail-fast, handoff, concurrencia máx. 2) | director | ACCEPTED | main | 2026-09-03 | ADR-0013. Cambios: opencode.json (agent.*.steps=25 + task: deny en 10 especialistas), .opencode/agent/*.md (frontmatter steps/task:deny + secciones fail-fast y handoff en 10 agentes), director.md (salvaguardas M1.2 + concurrencia 2 + domain no disponible), AGENTS.md, STATE/TASKS/DECISIONS. Validado: JSON válido, subagent_depth=1, especialistas sin delegación, steps efectivo, git diff --check limpio. Commit M1.2 creado (sin push). **M1.2 = baseline operativo vigente** |
 | M1.3-001 | Circuit breaker determinista de tool-loops (experimento) | director | DESCARTADO | main | 2026-09-04 | **Experimento NO OPERATIVO, descartado para uso.** Commit 22bf730. Los tests internos pasaban, pero la validación end-to-end real con Shell FALLÓ (#1/#2/#3 EXECUTED): el hook permission.ask no intercepta la ejecución de Shell en runtime => NO proporciona protección runtime efectiva. Desactivado en opencode.json (no registrado en el array plugin); código conservado como historial. Causa: limitación de la API de hooks de OpenCode. No se continuará su investigación ni desarrollo. Riesgo residual: un agente puede entrar en loop hasta steps=25 (mitigado por M1.2) |
 | M1.3-002 | Cierre de investigación de runtime multiagente: consolidar M1.2 como baseline y registrar M1.3 como no operativo | director | ACCEPTED | main | 2026-09-04 | Cambios: opencode.json (plugin circuit-breaker desactivado), comentarios de estado en circuit-breaker.js y tools.js, STATE/TASKS/DECISIONS/ADR-0013 actualizados. Validado: opencode.json JSON válido, M1.2 sigue efectiva (subagent_depth=1, task: deny, steps=25), M1.3 no se presenta como protección operativa, docs/design/ intacto, git diff --check limpio. docs/design/ NO incluido en el commit (trabajo de Phase 2 pendiente de continuar) |
+| PHASE2-001 | Diseño detallado Phase 2: persistencia, seguridad, testing, API | director | ACCEPTED | main | 2026-09-04 | 18 archivos en docs/design/ (~4600 líneas). Áreas: persistence/ (8), security/ (7), testing/ (1), api/ (2). Revisiones aplicadas: 5 findings corregidos (3 MEDIUM, 1 MEDIUM, 1 LOW). Permisos de agentes actualizados (.opencode/agent/*.md) para permitir escritura en docs/design/**. Checkpoint commit pendiente |
 
 ## Historial
 
@@ -106,3 +107,13 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
    para uso. docs/design/ (trabajo previo de Phase 2) preservado intacto y
    NO incluido en el commit de cierre. GastosE preparado para reanudar
    Phase 2 (pendiente de instrucción del usuario).
+- 2026-09-04 — director: PHASE2-001 (diseño detallado Phase 2) -> ACCEPTED.
+   Diseño completado en docs/design/ (18 archivos, ~4600 líneas). Áreas:
+   persistence/ (8 archivos: esquema, migraciones, invariantes, cola de
+   trabajo, índices, tenencia, auditoría, V1-S1), security/ (7 archivos:
+   autenticación, autorización, uploads, sandbox, auditoría, secrets),
+   testing/ (1 archivo: estrategia), api/ (2 archivos: implementación).
+   Revisiones aplicadas: 5 findings corregidos (SIGALRM -> cgroup timeout,
+   network_mode none -> red dedicada con firewall, audit-events reader ->
+   approver, propagación de rol G14, rate limiting nota). Permisos de
+   agentes actualizados (.opencode/agent/*.md). Checkpoint commit pendiente.

@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 1 — Requirements and Domain Discovery (cierre M1; Phase 2 NO iniciada)
+- **Phase**: 2 — Technical Design (diseño detallado completado; implementación NO iniciada)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: cierre de investigación de runtime — M1.3 descartado, M1.2 consolidado como baseline; preparación para reanudar Phase 2)
+- **Updated**: 2026-09-04 (por director: diseño Phase 2 completado en `docs/design/` — persistencia, seguridad, testing, API; revisiones aplicadas; checkpoint pendiente de commit)
 
 ## Current architecture
 
@@ -44,6 +44,15 @@
   informe con 10 amenazas (T1..T10), 22 gaps (G1..G22) y 8 decisiones
   (D1..D8). D1/OQ-9 (tenancy) resuelta por ADR-0008 (organización
   multi-usuario); pendientes D2..D8.
+- **Diseño Phase 2 completado en `docs/design/`** (por director, 2026-09-04):
+  18 archivos (~4600 líneas) en 4 áreas:
+  - `persistence/` (8 archivos): esquema, migraciones, invariantes, cola de
+    trabajo, índices, tenencia, auditoría, V1-S1.
+  - `security/` (7 archivos): autenticación, autorización, uploads, sandbox,
+    auditoría, secrets.
+  - `testing/` (1 archivo): estrategia de testing.
+  - `api/` (2 archivos): implementación API.
+  - Revisiones aplicadas: 5 findings (3 MEDIUM, 1 MEDIUM, 1 LOW) corregidos.
 - Runtime del servidor: podman 5.8.2 (docker CLI lo emula). Python 3.9
   (pytest, alembic, PyYAML, jsonschema disponibles). Sin Node.js.
 
@@ -107,9 +116,12 @@
   end-to-end real falló: #1 EXECUTED, #2 EXECUTED, #3 EXECUTED). No se
   continuará su investigación. Riesgo residual: loops hasta `steps: 25`
   (mitigado por las salvaguardas M1.2).
-- **Preparado para reanudar Phase 2** (pendiente de instrucción del
-  usuario): trabajo previo de Phase 2 en `docs/design/` preservado intacto.
-  Phase 2 NO reanudada hasta nuevo aviso del usuario.
+- **Diseño Phase 2 COMPLETADO** (2026-09-04): `docs/design/` contiene el
+  diseño detallado de implementación (persistencia, seguridad, testing,
+  API). Revisiones aplicadas. Pendiente: commit de checkpoint.
+- **Próximo paso**: commit de checkpoint del diseño Phase 2 (sin push).
+  Tras el commit: preparación para implementación por vertical slices
+  (V1-S1 primero, ver docs/project/VERTICAL-SLICES.md).
 - Phase 1 COMPLETADA (M1 cerrado). Orden de orquestación del director:
   1. DOMAIN -> baseline funcional (docs/requirements/). [ACCEPTED]
   2. ARCHITECT -> arquitectura + contratos API + ADRs (docs/architecture/,
