@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 completadas; V2-S2 pendiente)
+- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 completadas; V3-S1 pendiente)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V2-S1 implementada. Worker de extracción: claim atómico, cascada determinística (XML/PDF text), validación schema estricto, persistencia E2+E3 con confidence/provenance, retry con backoff, lease reaping. 77 tests passing. Quality gate superado.)
+- **Updated**: 2026-09-04 (por director: V2-S2 implementada. Retry de extracción + listado/consulta de extracciones. 90 tests passing. Quality gate superado.)
 
 ## Current architecture
 
@@ -154,6 +154,10 @@
   reap). Cascada determinística XML/PDF text. Validación schema estricto.
   Persistencia E2+E3. Retry con backoff. Lease reaping. 77 tests passing.
   Quality gate superado.
-- **Próximo paso**: V2-S2 (reintento de extracción + listado/consulta).
+- **V2-S2 COMPLETADA** (2026-09-04): retry de extracción
+  (POST /documents/{id}/extractions/retry), listado
+  (GET /documents/{id}/extractions), detalle
+  (GET /extractions/{id}). 90 tests passing. Quality gate superado.
+- **Próximo paso**: V3-S1 (normalización determinística).
 - Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 ACCEPTED.
+- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 ACCEPTED.

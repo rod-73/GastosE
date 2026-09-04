@@ -79,3 +79,10 @@ class DuplicateDocumentException(GastosEException):
             409,
             {"existing_id": existing_id},
         )
+
+
+class ConflictException(GastosEException):
+    """409: the requested operation conflicts with the current state."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("conflict.state", message, 409)
