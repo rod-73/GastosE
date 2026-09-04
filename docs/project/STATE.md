@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 completadas; V5-S1 pendiente)
+- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 + V5-S1 + V5-S2 completadas; V6-S1 pendiente)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V4-S1..S4 implementadas. Revisión, decisiones, aceptación, rechazo, anulación. 199 tests passing. Quality gate superado.)
+- **Updated**: 2026-09-04 (por director: V5-S1+V5-S2 implementadas. Detección y resolución de duplicados. 218 tests passing. Quality gate superado.)
 
 ## Current architecture
 
@@ -186,6 +186,14 @@
   y bloqueo por duplicación probable (INV-6). Rechazo terminal. Anulación solo
   de gastos accepted. Auditoría en todas las acciones (ADR-0012).
   199 tests passing. Quality gate superado.
-- **Próximo paso**: V5-S1 (detección de duplicados por clave lógica).
+- **V5-S1 + V5-S2 COMPLETADAS** (2026-09-04): detección de duplicados por
+  clave lógica (DUP-2/3) al completar extracción, listado y consulta de
+  duplicaciones (GET /duplications, GET /duplications/{id}), resolución
+  humana auditada (POST /duplications/{id}/resolve). Clave:
+  (proveedor, número, fecha, importe). DUP-9 (fingerprint prioridad),
+  DUP-10 (múltiples duplicaciones). Resolución terminal (confirmed /
+  not_duplicate). Bloqueo de aceptación por duplicación probable (INV-6).
+  218 tests passing. Quality gate superado.
+- **Próximo paso**: V6-S1 (CRUD de proveedores).
 - Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 ACCEPTED.
+- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 + V5-S1 + V5-S2 ACCEPTED.

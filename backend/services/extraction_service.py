@@ -230,6 +230,17 @@ def process_job(job: ExtractionJob, db: DbSession) -> Extraction:
     document.state = "extracted"
     document.updated_at = now
 
+    # DUP-2/3: Detect logical duplicates at extraction completion.
+    try:
+        from backend.services.duplication_service import detect_logical_duplicates
+        detect_logical_duplicates(
+            extraction_id=extraction.id,
+            owner_id=owner_id,
+            db=db,
+        )
+    except Exception:
+        logger.exception("Duplication detection failed (non-blocking)")
+
     # Audit event.
     audit = AuditEvent(
         id=uuid7(),
