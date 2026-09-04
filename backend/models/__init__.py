@@ -13,6 +13,7 @@ from backend.models.normalized_value import NormalizedValue
 from backend.models.organization import Organization
 from backend.models.session import Session
 from backend.models.user import User
+from backend.models.validated_value import ValidatedValue
 
 __all__ = [
     "AuditEvent",
@@ -26,4 +27,5 @@ __all__ = [
     "Session",
     "SourceDocument",
     "User",
+    "ValidatedValue",
 ]

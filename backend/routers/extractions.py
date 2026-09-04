@@ -1,4 +1,4 @@
-"""Extraction and normalization endpoints (V2-S2 + V3-S1).
+"""Extraction, normalization, and validation endpoints (V2-S2 + V3-S1 + V3-S2).
 
 - POST /api/v1/documents/{id}/extractions/retry: create a new extraction
   job if the previous failure is recoverable (FR-FST-2).
@@ -6,6 +6,8 @@
 - GET /api/v1/extractions/{id}: get a specific extraction with its values.
 - POST /api/v1/extractions/{id}/normalize: normalize extracted values (V3-S1).
 - GET /api/v1/extractions/{id}/normalized-values: list normalized values.
+- POST /api/v1/extractions/{id}/validate: validate normalized values (V3-S2).
+- GET /api/v1/extractions/{id}/validated-values: list validated values.
 """
 import uuid
 from typing import List, Optional
@@ -23,7 +25,8 @@ from backend.models.extraction import Extraction, ExtractedValue
 from backend.models.extraction_job import ExtractionJob
 from backend.models.normalized_value import NormalizedValue
 from backend.models.session import Session
-from backend.services import normalization_service
+from backend.models.validated_value import ValidatedValue
+from backend.services import normalization_service, validation_service
 from backend.utils import uuid7
 
 router = APIRouter(tags=["extractions"])
@@ -474,6 +477,249 @@ def list_normalized_values(
                 field=v.field,
                 normalized_value=v.normalized_value,
                 normalization_rule=v.normalization_rule,
+                created_at=v.created_at.isoformat() if v.created_at else "",
+            )
+            for v in values
+        ],
+    )
+
+
+# --- V3-S2: Validation schemas and endpoints ---
+
+
+class ValidatedValueResponse(BaseModel):
+    """A single validated value."""
+
+    id: uuid.UUID
+    normalized_value_id: uuid.UUID
+    field: str
+    validated_value: str
+    validation_result: str
+    rules_applied: str
+    created_at: str
+
+
+class ValidateResponse(BaseModel):
+    """Response for the validation endpoint."""
+
+    extraction_id: uuid.UUID
+    passed_count: int
+    failed_count: int
+    warning_count: int
+    document_state: str
+
+
+class ValidatedValuesListResponse(BaseModel):
+    """List of validated values for an extraction."""
+
+    extraction_id: uuid.UUID
+    count: int
+    values: List[ValidatedValueResponse]
+
+
+@router.post(
+    "/api/v1/extractions/{extraction_id}/validate",
+    response_model=ValidateResponse,
+    dependencies=[Depends(require_role("reader"))],
+)
+def validate_extraction(
+    extraction_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> ValidateResponse:
+    """Validate all normalized values for a completed extraction (V3-S2, N4).
+
+    Creates ValidatedValue records (E5) for each normalized value.
+    Applies VR rules (arithmetic, schema, normalization, business).
+
+    Precondition: the extraction must be normalized (E4 records exist).
+    """
+    # Verify extraction exists and belongs to the caller.
+    extraction = (
+        db.execute(
+            select(Extraction).where(
+                Extraction.id == extraction_id,
+                Extraction.owner_id == session.organization_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if extraction is None:
+        raise NotFoundException("Extraction")
+
+    # Check if normalized values exist (precondition for validation).
+    normalized_count = (
+        db.execute(
+            select(NormalizedValue)
+            .where(
+                NormalizedValue.extracted_value_id.in_(
+                    select(ExtractedValue.id).where(
+                        ExtractedValue.extraction_id == extraction_id
+                    )
+                )
+            )
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    if normalized_count is None:
+        raise ConflictException(
+            "No normalized values found. Run normalization first "
+            "(POST /extractions/{id}/normalize)."
+        )
+
+    # Check if already validated (idempotency).
+    existing_validated = (
+        db.execute(
+            select(ValidatedValue)
+            .where(
+                ValidatedValue.normalized_value_id.in_(
+                    select(NormalizedValue.id).where(
+                        NormalizedValue.extracted_value_id.in_(
+                            select(ExtractedValue.id).where(
+                                ExtractedValue.extraction_id == extraction_id
+                            )
+                        )
+                    )
+                )
+            )
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    if existing_validated is not None:
+        # Already validated: return current state.
+        doc = (
+            db.execute(
+                select(SourceDocument).where(
+                    SourceDocument.id == extraction.document_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        all_vv = (
+            db.execute(
+                select(ValidatedValue).where(
+                    ValidatedValue.normalized_value_id.in_(
+                        select(NormalizedValue.id).where(
+                            NormalizedValue.extracted_value_id.in_(
+                                select(ExtractedValue.id).where(
+                                    ExtractedValue.extraction_id == extraction_id
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        passed = sum(1 for v in all_vv if v.validation_result == "passed")
+        failed = sum(1 for v in all_vv if v.validation_result == "failed")
+        warning = sum(1 for v in all_vv if v.validation_result == "warning")
+        return ValidateResponse(
+            extraction_id=extraction_id,
+            passed_count=passed,
+            failed_count=failed,
+            warning_count=warning,
+            document_state=doc.state if doc else "unknown",
+        )
+
+    # Execute validation.
+    passed_count, failed_count, warning_count = validation_service.validate_extraction(
+        extraction_id=extraction_id,
+        owner_id=session.organization_id,
+        db=db,
+    )
+
+    # Update document state.
+    doc = (
+        db.execute(
+            select(SourceDocument).where(
+                SourceDocument.id == extraction.document_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if doc is not None:
+        if failed_count > 0:
+            doc.state = "validation_error"
+        elif warning_count > 0:
+            doc.state = "under_review"
+        else:
+            doc.state = "validated"
+        db.commit()
+
+    return ValidateResponse(
+        extraction_id=extraction_id,
+        passed_count=passed_count,
+        failed_count=failed_count,
+        warning_count=warning_count,
+        document_state=doc.state if doc else "unknown",
+    )
+
+
+@router.get(
+    "/api/v1/extractions/{extraction_id}/validated-values",
+    response_model=ValidatedValuesListResponse,
+    dependencies=[Depends(require_role("reader"))],
+)
+def list_validated_values(
+    extraction_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> ValidatedValuesListResponse:
+    """List all validated values for an extraction."""
+    # Verify extraction exists and belongs to the caller.
+    extraction = (
+        db.execute(
+            select(Extraction).where(
+                Extraction.id == extraction_id,
+                Extraction.owner_id == session.organization_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if extraction is None:
+        raise NotFoundException("Extraction")
+
+    values = (
+        db.execute(
+            select(ValidatedValue)
+            .where(
+                ValidatedValue.normalized_value_id.in_(
+                    select(NormalizedValue.id).where(
+                        NormalizedValue.extracted_value_id.in_(
+                            select(ExtractedValue.id).where(
+                                ExtractedValue.extraction_id == extraction_id
+                            )
+                        )
+                    )
+                )
+            )
+            .order_by(ValidatedValue.field.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+    return ValidatedValuesListResponse(
+        extraction_id=extraction_id,
+        count=len(values),
+        values=[
+            ValidatedValueResponse(
+                id=v.id,
+                normalized_value_id=v.normalized_value_id,
+                field=v.field,
+                validated_value=v.validated_value,
+                validation_result=v.validation_result,
+                rules_applied=v.rules_applied,
                 created_at=v.created_at.isoformat() if v.created_at else "",
             )
             for v in values

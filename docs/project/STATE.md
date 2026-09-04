@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 completadas; V3-S2 pendiente)
+- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 completadas; V3-S3 pendiente)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V3-S1 implementada. Normalización determinística (currency, amount, date, NIF/CIF, VAT). 138 tests passing. Quality gate superado.)
+- **Updated**: 2026-09-04 (por director: V3-S2 implementada. Validación determinística (VR rules: arith, schema, norm, biz). 171 tests passing. Quality gate superado.)
 
 ## Current architecture
 
@@ -164,6 +164,13 @@
   amount (decimal exacto), date (ISO-8601), NIF/CIF (check digit), VAT rate
   (0/4/10/21). Provenance INV-10. Idempotencia. Aislamiento por org.
   138 tests passing. Quality gate superado.
-- **Próximo paso**: V3-S2 (validación determinística VR rules).
+- **V3-S2 COMPLETADA** (2026-09-04): validación determinística
+  (POST /extractions/{id}/validate, GET /extractions/{id}/validated-values).
+  Migración 0005 (validated_values E5). VR rules: VR-ARITH-1 (identidad total),
+  VR-SCHEMA-2 (campos obligatorios), VR-NORM-1..4 (currency, date, NIF, VAT),
+  VR-BIZ-5/8/9 (moneda única, fecha coherente, importe razonable).
+  Resultados: passed/failed/warning. Provenance INV-10. Idempotencia.
+  Aislamiento por org. 171 tests passing. Quality gate superado.
+- **Próximo paso**: V3-S3 (creación de gasto E6 a partir de valores validados).
 - Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 ACCEPTED.
+- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 ACCEPTED.
