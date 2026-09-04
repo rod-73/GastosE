@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 + V5-S1 + V5-S2 completadas; V6-S1 pendiente)
+- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 + V5-S1 + V5-S2 + V6-S1 + V6-S2 + V7-S1 + V8-S1 + V8-S2 completadas)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V5-S1+V5-S2 implementadas. Detección y resolución de duplicados. 218 tests passing. Quality gate superado.)
+- **Updated**: 2026-09-04 (por director: V8-S2 implementada. Autorización por rol + aislamiento object-level. 296 tests passing. Quality gate superado. Phase 2 COMPLETADA.)
 
 ## Current architecture
 
@@ -194,6 +194,28 @@
   DUP-10 (múltiples duplicaciones). Resolución terminal (confirmed /
   not_duplicate). Bloqueo de aceptación por duplicación probable (INV-6).
   218 tests passing. Quality gate superado.
-- **Próximo paso**: V6-S1 (CRUD de proveedores).
+- **V6-S1 COMPLETADA** (2026-09-04): CRUD de proveedores (POST /suppliers,
+  GET /suppliers, GET /suppliers/{id}, PUT /suppliers/{id},
+  POST /suppliers/{id}/deactivate). NIF/CIF validado (VR-NORM-3). Búsqueda por
+  NIF/nombre. Estado active/inactive. Con gastos aceptados no se elimina, solo
+  inactive. Auditoría. Aislamiento por org. 235 tests passing. Quality gate
+  superado.
+- **V6-S2 COMPLETADA** (2026-09-04): CRUD de catálogos (categorías, métodos de
+  pago, tipos impositivos, monedas). 17 endpoints. FR-CAT-1..3. Auditoría.
+  Aislamiento por org. 260 tests passing. Quality gate superado.
+- **V7-S1 COMPLETADA** (2026-09-04): registro de auditoría append-only
+  (GET /audit-events, GET /audit-events/{id}). NFR-1, INV-10. Sin
+  UPDATE/DELETE. Aislamiento por org. 270 tests passing. Quality gate
+  superado.
+- **V8-S1 COMPLETADA** (2026-09-04): autenticación (login/logout,
+  sesiones/tokens con expiración y revocación). ADR-0009. NFR-7.
+  283 tests passing. Quality gate superado.
+- **V8-S2 COMPLETADA** (2026-09-04): autorización por rol (reader, reviewer,
+  approver, admin) + object-level authorization (filtro por owner_id en todas
+  las queries). NFR-7. Test de aislamiento: usuario A no ve recurso de B (404).
+  296 tests passing. Quality gate superado.
+- **Phase 2 COMPLETADA** (2026-09-04): todas las vertical slices implementadas
+  y ACCEPTED.
 - Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 + V5-S1 + V5-S2 ACCEPTED.
+- Phase 2 COMPLETADA: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 +
+  V4-S1..S4 + V5-S1 + V5-S2 + V6-S1 + V6-S2 + V7-S1 + V8-S1 + V8-S2 ACCEPTED.

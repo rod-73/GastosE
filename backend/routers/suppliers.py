@@ -201,6 +201,8 @@ def update_supplier(
             db=db,
         )
     except ValueError as e:
+        if "not found" in str(e).lower():
+            raise NotFoundException(str(e))
         raise ConflictException(str(e))
 
     return SupplierResponse(
@@ -236,6 +238,8 @@ def deactivate_supplier(
             db=db,
         )
     except ValueError as e:
+        if "not found" in str(e).lower():
+            raise NotFoundException(str(e))
         raise ConflictException(str(e))
 
     return SupplierResponse(

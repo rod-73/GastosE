@@ -27,6 +27,11 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
 | V3S3-001 | Implementar V3-S3: creación de gasto E6 a partir de valores validados | director | ACCEPTED | main | 2026-09-04 | 3 endpoints: POST /extractions/{id}/expenses (crea E6+E7+E8), GET /expenses/{id} (detalle con líneas), GET /expenses (listado). Migración 0006 (expenses, expense_lines, tax_lines). INV-1, INV-3, INV-13. Estado draft. Idempotencia. Aislamiento por org. Modelos ORM catálogos (Supplier, TaxRate, Currency, Category, PaymentMethod). 182 tests passing. Quality gate superado |
 | V4S1-001 | Implementar V4-S1..S4: revisión, decisiones, aceptación, rechazo, anulación | director | ACCEPTED | main | 2026-09-04 | 5 endpoints: GET /expenses/{id}/review (vista cinco niveles), POST /expenses/{id}/review/decisions (confirm/correct/reject), POST /expenses/{id}/accept (revalidación + snapshot), POST /expenses/{id}/reject (terminal), POST /expenses/{id}/void (solo accepted). Corrección auditada (INV-7). Aceptación con INV-1 + bloqueo duplicación (INV-6). Auditoría ADR-0012. 199 tests passing. Quality gate superado |
 | V5S1-001 | Implementar V5-S1+V5-S2: detección y resolución de duplicados | director | ACCEPTED | main | 2026-09-04 | 3 endpoints: GET /duplications (listado con filtro), GET /duplications/{id} (detalle con documentos), POST /duplications/{id}/resolve (confirmar/no-duplicar, terminal, auditado). Detección por clave lógica (DUP-2/3) integrada en pipeline de extracción. Clave: (proveedor, número, fecha, importe). DUP-9 (fingerprint prioridad), DUP-10 (múltiples). Bloqueo aceptación (INV-6). 218 tests passing. Quality gate superado |
+| V6S1-001 | Implementar V6-S1: CRUD de proveedores | director | ACCEPTED | main | 2026-09-04 | 5 endpoints: POST /suppliers, GET /suppliers, GET /suppliers/{id}, PUT /suppliers/{id}, POST /suppliers/{id}/deactivate. NIF/CIF validado (VR-NORM-3). Búsqueda por NIF/nombre. Estado active/inactive. Con gastos aceptados no se elimina, solo inactive. Auditoría. Aislamiento por org. 235 tests passing. Quality gate superado |
+| V6S2-001 | Implementar V6-S2: CRUD de catálogos | director | ACCEPTED | main | 2026-09-04 | 17 endpoints: categorías (5), métodos de pago (5), tipos impositivos (5), monedas (2). FR-CAT-1..3. Auditoría. Aislamiento por org. 260 tests passing. Quality gate superado |
+| V7S1-001 | Implementar V7-S1: registro de auditoría append-only | director | ACCEPTED | main | 2026-09-04 | 2 endpoints: GET /audit-events (listado con filtros), GET /audit-events/{id} (detalle). NFR-1, INV-10. Append-only (sin UPDATE/DELETE). Aislamiento por org. 270 tests passing. Quality gate superado |
+| V8S1-001 | Implementar V8-S1: autenticación (login/logout, sesiones) | director | ACCEPTED | main | 2026-09-04 | 3 endpoints: GET /sessions (listado), POST /sessions/{id}/revoke, POST /sessions/revoke-all. ADR-0009: token opaco + sesión server-side con revocación. NFR-7. Expiración y revocación verificadas. Aislamiento por usuario. 283 tests passing. Quality gate superado |
+| V8S2-001 | Implementar V8-S2: autorización por rol + object-level authorization | director | ACCEPTED | main | 2026-09-04 | Autorización por rol (reader, reviewer, approver, admin) + object-level authorization (filtro por owner_id en todas las queries). NFR-7. Test de aislamiento: usuario A no ve recurso de B (404). Corrección en routers/suppliers.py: ValueError "not found" -> 404 (no 409). 296 tests passing. Quality gate superado |
 
 ## Historial
 
@@ -137,12 +142,44 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
    motivo obligatorio). Auditoría en todas las acciones (ADR-0012).
    Aislamiento por org. 199 tests passing. Quality gate superado.
 - 2026-09-04 — director: V5S1-001 (V5-S1+V5-S2: detección y resolución de
-   duplicados) -> ACCEPTED. 3 endpoints: GET /duplications (listado con
-   filtro por estado), GET /duplications/{id} (detalle con info de ambos
-   documentos), POST /duplications/{id}/resolve (confirmar duplicado /
-   confirmar no-duplicado, terminal, motivo obligatorio, auditado DUP-5).
-   Detección por clave lógica (DUP-2/3) integrada en el pipeline de
-   extracción (process_job). Clave: (proveedor, número, fecha, importe).
-   DUP-9 (fingerprint tiene prioridad), DUP-10 (múltiples duplicaciones).
-   Bloqueo de aceptación por duplicación probable (INV-6). Aislamiento por
-   org. 218 tests passing. Quality gate superado.
+    duplicados) -> ACCEPTED. 3 endpoints: GET /duplications (listado con
+    filtro por estado), GET /duplications/{id} (detalle con info de ambos
+    documentos), POST /duplications/{id}/resolve (confirmar duplicado /
+    confirmar no-duplicado, terminal, motivo obligatorio, auditado DUP-5).
+    Detección por clave lógica (DUP-2/3) integrada en el pipeline de
+    extracción (process_job). Clave: (proveedor, número, fecha, importe).
+    DUP-9 (fingerprint tiene prioridad), DUP-10 (múltiples duplicaciones).
+    Bloqueo de aceptación por duplicación probable (INV-6). Aislamiento por
+    org. 218 tests passing. Quality gate superado.
+- 2026-09-04 — director: V6S1-001 (V6-S1: CRUD de proveedores) -> ACCEPTED.
+    5 endpoints: POST /suppliers (crear con NIF/CIF validado), GET /suppliers
+    (listado con búsqueda), GET /suppliers/{id} (detalle), PUT /suppliers/{id}
+    (actualización), POST /suppliers/{id}/deactivate (desactivación).
+    FR-SUP-1..5. NIF/CIF validado (VR-NORM-3). Búsqueda por NIF/nombre.
+    Estado active/inactive. Con gastos aceptados no se elimina, solo
+    inactive. Auditoría. Aislamiento por org. 235 tests passing. Quality gate
+    superado.
+- 2026-09-04 — director: V6S2-001 (V6-S2: CRUD de catálogos) -> ACCEPTED.
+    17 endpoints: categorías (POST, GET list, GET, PUT, POST deactivate),
+    métodos de pago (POST, GET list, GET, PUT, POST deactivate), tipos
+    impositivos (POST, GET list, GET, PUT, POST deactivate), monedas (GET
+    list, GET). FR-CAT-1..3. Auditoría. Aislamiento por org. 260 tests
+    passing. Quality gate superado.
+- 2026-09-04 — director: V7S1-001 (V7-S1: registro de auditoría append-only)
+    -> ACCEPTED. 2 endpoints: GET /audit-events (listado con filtros por
+    entity_type, action, date range), GET /audit-events/{id} (detalle).
+    NFR-1, INV-10. Append-only (sin UPDATE/DELETE). Aislamiento por org.
+    270 tests passing. Quality gate superado.
+- 2026-09-04 — director: V8S1-001 (V8-S1: autenticación) -> ACCEPTED. 3
+    endpoints: GET /sessions (listado de sesiones del usuario),
+    POST /sessions/{id}/revoke (revocar sesión), POST /sessions/revoke-all
+    (revocar todas las sesiones del usuario). ADR-0009: token opaco + sesión
+    server-side con revocación. NFR-7. Expiración y revocación verificadas.
+    Aislamiento por usuario. 283 tests passing. Quality gate superado.
+- 2026-09-04 — director: V8S2-001 (V8-S2: autorización por rol + object-level
+    authorization) -> ACCEPTED. Autorización por rol (reader, reviewer,
+    approver, admin) + object-level authorization (filtro por owner_id en
+    todas las queries). NFR-7. Test de aislamiento: usuario A no ve recurso
+    de B (404). Corrección en routers/suppliers.py: ValueError "not found"
+    -> 404 (no 409). 296 tests passing. Quality gate superado. **Phase 2
+    COMPLETADA.**
