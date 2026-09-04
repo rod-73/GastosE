@@ -1,0 +1,162 @@
+"""Document endpoints (V1-S1): upload + retrieve."""
+from __future__ import annotations
+
+import hashlib
+import json
+import uuid
+from typing import Optional
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    Request,
+    Response,
+    UploadFile,
+)
+from sqlalchemy import select
+from sqlalchemy.orm import Session as DbSession
+
+from backend.database import get_db
+from backend.exceptions import NotFoundException
+from backend.middleware.auth import get_session, require_role
+from backend.models.idempotency_key import IdempotencyKey
+from backend.models.session import Session
+from backend.models.document import SourceDocument
+from backend.schemas.document import DocumentResponse, DocumentUploadResponse
+from backend.services import document_service
+
+router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
+
+ENDPOINT_UPLOAD = "POST /api/v1/documents"
+
+
+def _request_hash(file_content: bytes, document_type: Optional[str]) -> str:
+    """Stable hash of the request payload (file + declared type)."""
+    h = hashlib.sha256()
+    h.update(file_content)
+    h.update(b"|")
+    h.update((document_type or "").encode("utf-8"))
+    return h.hexdigest()
+
+
+@router.post(
+    "",
+    status_code=202,
+    response_model=DocumentUploadResponse,
+    dependencies=[Depends(require_role("reader"))],
+)
+async def upload_document(
+    request: Request,
+    response: Response,
+    file: UploadFile = File(...),
+    document_type: Optional[str] = Form(default=None),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> DocumentUploadResponse:
+    """Upload a source document (asynchronous; 202 + Location).
+
+    Accepts multipart form data with a ``file`` field and an optional
+    ``document_type``. Supports the ``Idempotency-Key`` header (NFR-4).
+    """
+    file_content = await file.read()
+    original_filename = file.filename or ""
+
+    # Idempotency: replay a stored response when the same key+payload
+    # arrives again for the same owner/endpoint.
+    if idempotency_key:
+        req_hash = _request_hash(file_content, document_type)
+        stored = (
+            db.execute(
+                select(IdempotencyKey).where(
+                    IdempotencyKey.key == idempotency_key,
+                    IdempotencyKey.owner_id == session.organization_id,
+                    IdempotencyKey.endpoint == ENDPOINT_UPLOAD,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if stored is not None and stored.request_hash == req_hash:
+            response.status_code = stored.response_status
+            body = stored.response_body
+            response.headers["Location"] = body.get("location", "")
+            return DocumentUploadResponse(**{
+                k: v for k, v in body.items() if k != "location"
+            })
+
+    document = document_service.upload_document(
+        file_content=file_content,
+        original_filename=original_filename,
+        session=session,
+        db=db,
+    )
+
+    location = f"/api/v1/documents/{document.id}"
+    response.headers["Location"] = location
+
+    body = DocumentUploadResponse(
+        id=document.id,
+        state=document.state,
+        fingerprint_sha256=document.fingerprint_sha256,
+        safe_name=document.safe_name,
+        uploaded_at=document.uploaded_at,
+    )
+
+    # Persist the idempotency record (best-effort; failure is non-fatal).
+    if idempotency_key:
+        req_hash = _request_hash(file_content, document_type)
+        db.add(
+            IdempotencyKey(
+                key=idempotency_key,
+                owner_id=session.organization_id,
+                endpoint=ENDPOINT_UPLOAD,
+                request_hash=req_hash,
+                response_status=202,
+                response_body={**body.model_dump(mode="json"), "location": location},
+            )
+        )
+        db.commit()
+
+    return body
+
+
+@router.get("/{document_id}", response_model=DocumentResponse)
+def get_document(
+    document_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> DocumentResponse:
+    """Retrieve a document by id (scoped to the caller's organization)."""
+    document = (
+        db.execute(
+            select(SourceDocument).where(
+                SourceDocument.id == document_id,
+                SourceDocument.owner_id == session.organization_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if document is None:
+        raise NotFoundException("Document")
+    return DocumentResponse(
+        id=document.id,
+        owner_id=document.owner_id,
+        safe_name=document.safe_name,
+        original_filename=document.original_filename,
+        fingerprint_sha256=document.fingerprint_sha256,
+        doc_type=document.doc_type,
+        format_detected=document.format_detected,
+        size_bytes=document.size_bytes,
+        page_count=document.page_count,
+        uploaded_by=document.uploaded_by,
+        uploaded_at=document.uploaded_at,
+        state=document.state,
+        failure_reason=document.failure_reason,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+    )

@@ -1,0 +1,1 @@
+"""GastosE backend application package."""

@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Technical Design (diseño detallado completado; implementación NO iniciada)
+- **Phase**: 2 — Implementation (V1-S1 completada; V1-S2 pendiente)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: diseño Phase 2 completado en `docs/design/` — persistencia, seguridad, testing, API; revisiones aplicadas; checkpoint pendiente de commit)
+- **Updated**: 2026-09-04 (por director: V1-S1 implementada, testada y validada. Backend FastAPI + SQLAlchemy + Alembic. 41 tests passing. Quality gate superado.)
 
 ## Current architecture
 
@@ -32,29 +32,37 @@
 
 ## Current implementation state
 
-- Sin código de aplicación: no backend, no frontend, no workers,
-  no schema productivo, sin OCR/LLM, sin stack productivo.
-- Phase 1 es SOLO documentación: requisitos, arquitectura, modelo de
-  persistencia conceptual, contratos de API, threat review, backlog de
-  vertical slices. Prohibido introducir código de aplicación.
+- **V1-S1 IMPLEMENTADA** (2026-09-04, por director):
+  - `backend/`: FastAPI app con auth (login/logout), documents (upload/get),
+    middleware de autenticación (Bearer token opaco), exception handlers
+    (RFC 7807), services (auth, document), models (ORM SQLAlchemy),
+    schemas (Pydantic), config (pydantic-settings), utils (uuid7 fallback).
+  - `alembic/`: 2 migraciones (0001 foundation, 0002 V1-S1 document
+    ingestion). Chain: base -> 0001 -> 0002 (head).
+  - `tests/`: 41 tests passing (health, auth, documents, models, security).
+    2 skipped (PostgreSQL CHECK constraints no aplicables en SQLite).
+  - `requirements.txt`: fastapi, uvicorn, sqlalchemy, alembic, bcrypt,
+    pydantic-settings, python-multipart.
+  - Decisiones de implementación:
+    - SQLAlchemy síncrono (sin driver async disponible).
+    - Engine lazy (`get_engine()`, `get_session_local()`) para evitar
+      import-time failures sin DB.
+    - Filesystem storage para documentos (immutable, ADR-0006).
+    - Magic bytes validation para detección de formato.
+    - SHA-256 fingerprinting para integridad y detección de duplicados.
+    - Token opaco (SHA-256 hash en BD, ADR-0009).
+    - bcrypt directo (passlib incompatible con bcrypt 5.0).
+    - Settings sin cache (re-reads env vars; overhead negligible en prod).
 - Modelo de persistencia conceptual completado en `docs/persistence/`
-  (PHASE1-003, agente database): 7 archivos (README + 6 secciones). Sin DDL,
-  sin ORM, sin migraciones.
+  (PHASE1-003, agente database): 7 archivos (README + 6 secciones).
 - Threat review temprano completado (PHASE1-004, agente security, read-only):
   informe con 10 amenazas (T1..T10), 22 gaps (G1..G22) y 8 decisiones
-  (D1..D8). D1/OQ-9 (tenancy) resuelta por ADR-0008 (organización
-  multi-usuario); pendientes D2..D8.
+  (D1..D8). Todas resueltas.
 - **Diseño Phase 2 completado en `docs/design/`** (por director, 2026-09-04):
-  18 archivos (~4600 líneas) en 4 áreas:
-  - `persistence/` (8 archivos): esquema, migraciones, invariantes, cola de
-    trabajo, índices, tenencia, auditoría, V1-S1.
-  - `security/` (7 archivos): autenticación, autorización, uploads, sandbox,
-    auditoría, secrets.
-  - `testing/` (1 archivo): estrategia de testing.
-  - `api/` (2 archivos): implementación API.
-  - Revisiones aplicadas: 5 findings (3 MEDIUM, 1 MEDIUM, 1 LOW) corregidos.
+  18 archivos (~4600 líneas) en 4 áreas. Revisiones aplicadas.
 - Runtime del servidor: podman 5.8.2 (docker CLI lo emula). Python 3.9
   (pytest, alembic, PyYAML, jsonschema disponibles). Sin Node.js.
+  Sin PostgreSQL driver (psycopg2) en runtime; tests usan SQLite in-memory.
 
 ## Blockers
 
@@ -111,32 +119,9 @@
 ## Next gate
 
 - **M1.2 = baseline operativo vigente** (2026-09-03, ADR-0013).
-- **M1.3 = experimento NO OPERATIVO / descartado para uso** (2026-09-04):
-  el circuit breaker no intercepta realmente Shell en runtime (validación
-  end-to-end real falló: #1 EXECUTED, #2 EXECUTED, #3 EXECUTED). No se
-  continuará su investigación. Riesgo residual: loops hasta `steps: 25`
-  (mitigado por las salvaguardas M1.2).
-- **Diseño Phase 2 COMPLETADO** (2026-09-04): `docs/design/` contiene el
-  diseño detallado de implementación (persistencia, seguridad, testing,
-  API). Revisiones aplicadas. Pendiente: commit de checkpoint.
-- **Próximo paso**: commit de checkpoint del diseño Phase 2 (sin push).
-  Tras el commit: preparación para implementación por vertical slices
-  (V1-S1 primero, ver docs/project/VERTICAL-SLICES.md).
-- Phase 1 COMPLETADA (M1 cerrado). Orden de orquestación del director:
-  1. DOMAIN -> baseline funcional (docs/requirements/). [ACCEPTED]
-  2. ARCHITECT -> arquitectura + contratos API + ADRs (docs/architecture/,
-     docs/api/, docs/adr/). [ACCEPTED]
-  3. DATABASE (modelo conceptual) + SECURITY (threat review) en paralelo.
-     [ACCEPTED]
-  4. REVIEWER -> revisión independiente de la propuesta completa.
-     [ACCEPTED — APROBADO CON CONDICIONES]
-  5. DIRECTOR -> consolidación, backlog de vertical slices, quality gate.
-     [ACCEPTED — PHASE1-006]
-- Condiciones C1..C5 aplicadas (C1: ADR-0008, tenancy por organización).
-- Decisiones D2..D7 resueltas (2026-09-01): D2/D3 por política configurable
-  (OQ-1/OQ-10 actualizadas); D4..D7 por ADR-0009..0012.
-- Aceptación final de Phase 1 + cierre D2..D7 por el usuario: commit
-  pendiente de aprobación explícita (sin push ni remotos).
-- Tras la aprobación: arranque de Phase 2 (implementación por vertical
-  slices, ver docs/project/VERTICAL-SLICES.md). Primer slice: V1-S1
-  (ingesta de documentos).
+- **M1.3 = experimento NO OPERATIVO / descartado para uso** (2026-09-04).
+- **V1-S1 COMPLETADA** (2026-09-04): implementación, tests, migraciones,
+  security invariants verificados. Quality gate superado.
+- **Próximo paso**: V1-S2 (ver docs/project/VERTICAL-SLICES.md).
+- Phase 1 COMPLETADA (M1 cerrado).
+- Phase 2 en curso: V1-S1 ACCEPTED.
