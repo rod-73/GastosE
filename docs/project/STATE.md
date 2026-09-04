@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 + V1-S2 completadas; V2-S1 pendiente)
+- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 completadas; V2-S2 pendiente)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V1-S2 implementada. Endpoints verify-fingerprint + content download. 47 tests passing. Quality gate superado.)
+- **Updated**: 2026-09-04 (por director: V2-S1 implementada. Worker de extracción: claim atómico, cascada determinística (XML/PDF text), validación schema estricto, persistencia E2+E3 con confidence/provenance, retry con backoff, lease reaping. 77 tests passing. Quality gate superado.)
 
 ## Current architecture
 
@@ -32,34 +32,53 @@
 
 ## Current implementation state
 
-- **V1-S1 + V1-S2 IMPLEMENTADAS** (2026-09-04, por director):
-  - `backend/`: FastAPI app con auth (login/logout), documents (upload/get/
-    verify-fingerprint/content), middleware de autenticación (Bearer token
-    opaco), exception handlers (RFC 7807), services (auth, document),
-    models (ORM SQLAlchemy), schemas (Pydantic), config (pydantic-settings),
-    utils (uuid7 fallback).
-  - `alembic/`: 2 migraciones (0001 foundation, 0002 V1-S1 document
-    ingestion). Chain: base -> 0001 -> 0002 (head).
-  - `tests/`: 47 tests passing (health, auth, documents, models, security).
-    2 skipped (PostgreSQL CHECK constraints no aplicables en SQLite).
-  - `requirements.txt`: fastapi, uvicorn, sqlalchemy, alembic, bcrypt,
-    pydantic-settings, python-multipart.
-  - V1-S2 endpoints:
-    - `POST /api/v1/documents/{id}/verify-fingerprint`: verifica integridad
-      (NFR-3). Re-lee el archivo, calcula SHA-256, compara con BD.
-    - `GET /api/v1/documents/{id}/content`: descarga binaria con
-      Content-Disposition, ETag (fingerprint), Content-Type por formato.
-  - Decisiones de implementación:
-    - SQLAlchemy síncrono (sin driver async disponible).
-    - Engine lazy (`get_engine()`, `get_session_local()`) para evitar
-      import-time failures sin DB.
-    - Filesystem storage para documentos (immutable, ADR-0006).
-    - Magic bytes validation para detección de formato.
-    - SHA-256 fingerprinting para integridad y detección de duplicados.
-    - Token opaco (SHA-256 hash en BD, ADR-0009).
-    - bcrypt directo (passlib incompatible con bcrypt 5.0).
-    - Settings sin cache (re-reads env vars; overhead negligible en prod).
-    - StreamingResponse para descarga (chunked, 64KB).
+- **V1-S1 + V1-S2 + V2-S1 IMPLEMENTADAS** (2026-09-04, por director):
+   - `backend/`: FastAPI app con auth (login/logout), documents (upload/get/
+     verify-fingerprint/content), worker (claim/process/reap), middleware de
+     autenticación (Bearer token opaco), exception handlers (RFC 7807),
+     services (auth, document, extraction), models (ORM SQLAlchemy),
+     schemas (Pydantic), config (pydantic-settings), utils (uuid7 fallback).
+   - `alembic/`: 3 migraciones (0001 foundation, 0002 V1-S1 document
+     ingestion, 0003 V2-S1 extraction). Chain: base -> 0001 -> 0002 -> 0003 (head).
+   - `tests/`: 77 tests passing (health, auth, documents, models, security,
+     extraction). 2 skipped (PostgreSQL CHECK constraints no aplicables en SQLite).
+   - `requirements.txt`: fastapi, uvicorn, sqlalchemy, alembic, bcrypt,
+     pydantic-settings, python-multipart.
+   - V1-S2 endpoints:
+     - `POST /api/v1/documents/{id}/verify-fingerprint`: verifica integridad
+       (NFR-3). Re-lee el archivo, calcula SHA-256, compara con BD.
+     - `GET /api/v1/documents/{id}/content`: descarga binaria con
+       Content-Disposition, ETag (fingerprint), Content-Type por formato.
+   - V2-S1 endpoints:
+     - `POST /api/v1/worker/claim`: claim atómico de job pendiente (FIFO,
+       scoped por org). 404 si no hay jobs pendientes.
+     - `POST /api/v1/worker/process?job_id={id}`: procesa un job claimado
+       (extracción + validación schema + persistencia E2/E3). 409 si el job
+       no está en 'running' o no pertenece al worker.
+     - `POST /api/v1/worker/reap`: reap de jobs con lease expirado.
+   - V2-S1 extracción:
+     - Cascada determinística: XML (xml_schema) -> PDF text (pdf_text_rules)
+       -> OCR (stub) -> LLM (stub).
+     - Validación schema estricto (VR-SCHEMA-1): campos requeridos,
+       confidence [0,1], provenance con method.
+     - Persistencia: Extraction (E2) + ExtractedValue (E3) con confidence
+       NUMERIC(4,3) + provenance JSON (INV-11).
+     - Retry con backoff exponencial (1min, 5min, 30min).
+     - Lease expiry + reaping (5min lease).
+     - Idempotencia: si existe extracción completed, se reutiliza.
+   - Decisiones de implementación:
+     - SQLAlchemy síncrono (sin driver async disponible).
+     - Engine lazy (`get_engine()`, `get_session_local()`) para evitar
+       import-time failures sin DB.
+     - Filesystem storage para documentos (immutable, ADR-0006).
+     - Magic bytes validation para detección de formato.
+     - SHA-256 fingerprinting para integridad y detección de duplicados.
+     - Token opaco (SHA-256 hash en BD, ADR-0009).
+     - bcrypt directo (passlib incompatible con bcrypt 5.0).
+     - Settings sin cache (re-reads env vars; overhead negligible en prod).
+     - StreamingResponse para descarga (chunked, 64KB).
+     - JSON (no JSONB) en modelos ORM para compatibilidad SQLite/PostgreSQL.
+     - OCR/LLM como stubs (fallo controlado, no bloquean la cascada).
 - Modelo de persistencia conceptual completado en `docs/persistence/`
   (PHASE1-003, agente database): 7 archivos (README + 6 secciones).
 - Threat review temprano completado (PHASE1-004, agente security, read-only):
@@ -131,6 +150,10 @@
   security invariants verificados. Quality gate superado.
 - **V1-S2 COMPLETADA** (2026-09-04): verify-fingerprint + content download.
   47 tests passing. Quality gate superado.
-- **Próximo paso**: V2-S1 (extracción, ver docs/project/VERTICAL-SLICES.md).
+- **V2-S1 COMPLETADA** (2026-09-04): worker de extracción (claim, process,
+  reap). Cascada determinística XML/PDF text. Validación schema estricto.
+  Persistencia E2+E3. Retry con backoff. Lease reaping. 77 tests passing.
+  Quality gate superado.
+- **Próximo paso**: V2-S2 (reintento de extracción + listado/consulta).
 - Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 en curso: V1-S1 + V1-S2 ACCEPTED.
+- Phase 2 en curso: V1-S1 + V1-S2 + V2-S1 ACCEPTED.

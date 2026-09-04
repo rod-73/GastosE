@@ -19,6 +19,7 @@ from backend.exceptions import GastosEException
 from backend.middleware.auth import auth_middleware
 from backend.routers import auth as auth_router
 from backend.routers import documents as documents_router
+from backend.routers import worker as worker_router
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
     # Routers.
     app.include_router(auth_router.router)
     app.include_router(documents_router.router)
+    app.include_router(worker_router.router)
 
     # Health endpoint (public, no auth).
     @app.get("/healthz", tags=["health"])
