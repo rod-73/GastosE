@@ -1,7 +1,7 @@
 # ADR-0013: Salvaguardas deterministas de ejecución del runtime multiagente
 
 Status: accepted
-Date: 2026-09-03
+Date: 2026-09-03 (actualizado 2026-09-04)
 
 ## Context
 
@@ -66,3 +66,33 @@ Se aplican salvaguardas con los mecanismos nativos disponibles en OpenCode
   relanzar automáticamente la misma tarea).
 - El Director conserva `task` permitido (es el único orquestador); su
   comportamiento de reintentos sigue la política fail-fast de su prompt.
+
+## Addendum 2026-09-04 — M1.3 (circuit breaker) NO OPERATIVO; M1.2 = baseline vigente
+
+**Contexto**: tras M1.2 se experimentó con un circuit breaker determinista
+de tool-loops (M1.3, commit 22bf730): plugin con hooks `tool.execute.after`
+(registro de llamadas) y `permission.ask` (denegar la 3ª llamada
+consecutiva idéntica). Sus tests internos pasaban.
+
+**Hallazgo**: la validación end-to-end real con Shell FALLÓ — 3 ejecuciones
+consecutivas idénticas no fueron interceptadas (#1 EXECUTED, #2 EXECUTED,
+#3 EXECUTED). El hook `permission.ask` no intercepta la ejecución de Shell
+en runtime, por lo que el circuit breaker NO proporciona protección runtime
+efectiva.
+
+**Decisión**:
+
+1. **M1.3 = experimento NO OPERATIVO, descartado para uso.** No se
+   continuará su investigación ni desarrollo (no se intentará corregir ni
+   extender OpenCode desde GastosE).
+2. **M1.3 desactivado en runtime**: eliminado del array `plugin` de
+   `opencode.json` (cambio mínimo). El código
+   (`.opencode/plugin/circuit-breaker.js`, `tests/test_circuit_breaker.py`)
+   se conserva como historial Git; no se elimina.
+3. **M1.2 = baseline operativo vigente** de las salvaguardas del runtime
+   multiagente: `subagent_depth=1`, `task: deny` en los 10 especialistas,
+   `steps: 25`, máximo 2 especialistas concurrentes, tareas acotadas,
+   fail-fast y handoffs estructurados.
+4. **Riesgo residual aceptado**: un agente puede entrar en loop hasta
+   alcanzar `steps: 25` (límite duro nativo). Mitigaciones vigentes: las
+   salvaguardas M1.2 anteriores.

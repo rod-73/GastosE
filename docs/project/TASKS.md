@@ -14,7 +14,9 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
 | PHASE1-005 | Revisión independiente de la propuesta Phase 1 | reviewer | ACCEPTED | - | 2026-08-31 | Read-only; veredicto APROBADO CON CONDICIONES (5 condiciones C1..C5); revisado y aceptado por el director |
 | PHASE1-006 | Consolidación Phase 1 + backlog de vertical slices + quality gate | director | ACCEPTED | - | 2026-08-31 | Consolidación completada: threat review materializado (C2), C3/C4/C5 aplicados, backlog de vertical slices en docs/project/VERTICAL-SLICES.md, quality gate superado. C1 (OQ-9) resuelta: ADR-0008 (organización multi-usuario). Commit pendiente de aprobación explícita |
 | PHASE2-000 | Cierre de decisiones D2..D7 (pre-Phase 2) | director | ACCEPTED | - | 2026-09-01 | D2/D3: política configurable (OQ-1/OQ-10 actualizadas). D4: ADR-0009 (token opaco + sesión BD). D5: ADR-0010 (ExtractionLLM provider-neutral, local por defecto). D6: ADR-0011 (sandbox contenedor + cgroup + network egress restringido). D7: ADR-0012 (append-only BD, hash-chain no es requisito V1). Consistencia transversal verificada. Commit pendiente de aprobación explícita |
-| M1.2-001 | Endurecer infraestructura multiagente (delegación exclusiva del Director, steps=25, fail-fast, handoff, concurrencia máx. 2) | director | ACCEPTED | main | 2026-09-03 | ADR-0013. Cambios: opencode.json (agent.*.steps=25 + task: deny en 10 especialistas), .opencode/agent/*.md (frontmatter steps/task:deny + secciones fail-fast y handoff en 10 agentes), director.md (salvaguardas M1.2 + concurrencia 2 + domain no disponible), AGENTS.md, STATE/TASKS/DECISIONS. Validado: JSON válido, subagent_depth=1, especialistas sin delegación, steps efectivo, git diff --check limpio. Commit M1.2 creado (sin push). Phase 2 NO reanudada |
+| M1.2-001 | Endurecer infraestructura multiagente (delegación exclusiva del Director, steps=25, fail-fast, handoff, concurrencia máx. 2) | director | ACCEPTED | main | 2026-09-03 | ADR-0013. Cambios: opencode.json (agent.*.steps=25 + task: deny en 10 especialistas), .opencode/agent/*.md (frontmatter steps/task:deny + secciones fail-fast y handoff en 10 agentes), director.md (salvaguardas M1.2 + concurrencia 2 + domain no disponible), AGENTS.md, STATE/TASKS/DECISIONS. Validado: JSON válido, subagent_depth=1, especialistas sin delegación, steps efectivo, git diff --check limpio. Commit M1.2 creado (sin push). **M1.2 = baseline operativo vigente** |
+| M1.3-001 | Circuit breaker determinista de tool-loops (experimento) | director | DESCARTADO | main | 2026-09-04 | **Experimento NO OPERATIVO, descartado para uso.** Commit 22bf730. Los tests internos pasaban, pero la validación end-to-end real con Shell FALLÓ (#1/#2/#3 EXECUTED): el hook permission.ask no intercepta la ejecución de Shell en runtime => NO proporciona protección runtime efectiva. Desactivado en opencode.json (no registrado en el array plugin); código conservado como historial. Causa: limitación de la API de hooks de OpenCode. No se continuará su investigación ni desarrollo. Riesgo residual: un agente puede entrar en loop hasta steps=25 (mitigado por M1.2) |
+| M1.3-002 | Cierre de investigación de runtime multiagente: consolidar M1.2 como baseline y registrar M1.3 como no operativo | director | ACCEPTED | main | 2026-09-04 | Cambios: opencode.json (plugin circuit-breaker desactivado), comentarios de estado en circuit-breaker.js y tools.js, STATE/TASKS/DECISIONS/ADR-0013 actualizados. Validado: opencode.json JSON válido, M1.2 sigue efectiva (subagent_depth=1, task: deny, steps=25), M1.3 no se presenta como protección operativa, docs/design/ intacto, git diff --check limpio. docs/design/ NO incluido en el commit (trabajo de Phase 2 pendiente de continuar) |
 
 ## Historial
 
@@ -86,6 +88,21 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
   director); (4) handoff estructurado (STATUS/ENTREGABLES/VALIDACION/
   RIESGOS/AL_DIRECTOR); (5) concurrencia máxima 2 especialistas (política
   del director); (6) domain NO DISPONIBLE temporalmente (no invocarlo).
-  Validación: opencode.json JSON válido, subagent_depth=1, especialistas sin
-  delegación, steps efectivo, git diff --check limpio. Commit M1.2 creado
-  (sin push). Phase 2 NO reanudada.
+   Validación: opencode.json JSON válido, subagent_depth=1, especialistas sin
+   delegación, steps efectivo, git diff --check limpio. Commit M1.2 creado
+   (sin push). Phase 2 NO reanudada.
+- 2026-09-04 — director: M1.3-001 (circuit breaker de tool-loops) ->
+   DESCARTADO. Experimento NO OPERATIVO: la validación end-to-end real con
+   Shell FALLÓ (3 ejecuciones consecutivas idénticas no interceptadas:
+   #1/#2/#3 EXECUTED); el hook permission.ask no intercepta la ejecución de
+   Shell en runtime, por lo que el breaker no proporciona protección
+   runtime efectiva. Desactivado en opencode.json (no registrado en el
+   array plugin); código conservado como historial (commit 22bf730). No se
+   continuará su investigación ni desarrollo. Riesgo residual documentado:
+   un agente puede entrar en loop hasta steps=25 (mitigado por M1.2).
+- 2026-09-04 — director: M1.3-002 (cierre de investigación de runtime) ->
+   ACCEPTED. M1.2 consolidado como baseline operativo vigente (ADR-0013
+   actualizado). M1.3 registrado como experimento no operativo / descartado
+   para uso. docs/design/ (trabajo previo de Phase 2) preservado intacto y
+   NO incluido en el commit de cierre. GastosE preparado para reanudar
+   Phase 2 (pendiente de instrucción del usuario).

@@ -289,6 +289,9 @@ export default async () => {
   };
 };
 
-// M1.3: Deterministic tool-loop circuit breaker
-// Imported separately to keep concerns isolated.
-// The circuit breaker plugin is registered via opencode.json plugin array.
+// M1.3: Deterministic tool-loop circuit breaker — EXPERIMENTO NO OPERATIVO
+// (descartado para uso, 2026-09-04). La validación end-to-end real con Shell
+// FALLÓ: el hook permission.ask no intercepta la ejecución de Shell en
+// runtime, por lo que el breaker NO proporciona protección efectiva.
+// Desactivado en opencode.json (no registrado en el array plugin).
+// El código se conserva solo como historial; no se continuará su desarrollo.

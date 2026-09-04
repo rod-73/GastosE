@@ -1,6 +1,14 @@
 /**
  * M1.3: Deterministic tool-loop circuit breaker for GastosE multi-agent runtime.
  *
+ * ESTADO: EXPERIMENTO NO OPERATIVO (descartado para uso, 2026-09-04).
+ * La validación end-to-end real con Shell FALLÓ (3 ejecuciones consecutivas
+ * idénticas no fueron interceptadas): el hook permission.ask no intercepta
+ * la ejecución de Shell en runtime, por lo que este breaker NO proporciona
+ * protección runtime efectiva. Desactivado en opencode.json (no registrado
+ * en el array plugin). El código se conserva como historial; no se
+ * continuará su desarrollo. Baseline operativo vigente: M1.2 (ADR-0013).
+ *
  * Detects consecutive repetitions of the same tool + equivalent arguments +
  * equivalent result within a session/agent, and blocks the third identical
  * execution to prevent infinite loops.

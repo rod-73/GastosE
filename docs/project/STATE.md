@@ -1,8 +1,8 @@
 # STATE — GastosE
 
 - **Phase**: 1 — Requirements and Domain Discovery (cierre M1; Phase 2 NO iniciada)
-- **Milestone**: M1.2 — Hardening de salvaguardas del runtime multiagente (ADR-0013)
-- **Updated**: 2026-09-03 (por director: endurecimiento del runtime multiagente — M1.2)
+- **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
+- **Updated**: 2026-09-04 (por director: cierre de investigación de runtime — M1.3 descartado, M1.2 consolidado como baseline; preparación para reanudar Phase 2)
 
 ## Current architecture
 
@@ -14,11 +14,19 @@
   migration-check, openapi-check, docker-health, scope-check.
 - Permisos least-privilege por agente (ver `.opencode/agent/*.md` y
   `opencode.json`).
-- Salvaguardas de ejecución (M1.2, ADR-0013): `subagent_depth=1` +
-  `task: deny` en los 10 especialistas (solo el Director delega);
-  `steps: 25` por especialista (límite duro nativo); política fail-fast y
-  handoff estructurado (STATUS/ENTREGABLES/VALIDACION/RIESGOS/AL_DIRECTOR);
-  máximo 2 especialistas concurrentes.
+- Salvaguardas de ejecución (M1.2, ADR-0013) — **baseline operativo
+  vigente**: `subagent_depth=1` + `task: deny` en los 10 especialistas
+  (solo el Director delega); `steps: 25` por especialista (límite duro
+  nativo); política fail-fast y handoff estructurado
+  (STATUS/ENTREGABLES/VALIDACION/RIESGOS/AL_DIRECTOR); máximo 2
+  especialistas concurrentes; tareas acotadas.
+- M1.3 (circuit breaker de tool-loops, commit 22bf730): **experimento NO
+  OPERATIVO, descartado para uso** (2026-09-04). La validación end-to-end
+  real con Shell FALLÓ (3 ejecuciones consecutivas idénticas no
+  interceptadas): el hook `permission.ask` no intercepta la ejecución de
+  Shell en runtime. No proporciona protección runtime efectiva. Desactivado
+  en `opencode.json` (no registrado en el array `plugin`); el código se
+  conserva como historial. No se continuará su investigación ni desarrollo.
 - Estado persistente: `docs/project/` (este archivo, TASKS, DECISIONS,
   CONTRACTS). ADRs en `docs/adr/`.
 
@@ -47,6 +55,12 @@
 
 ## Riesgos operativos pendientes
 
+- **Riesgo residual de loops (post-M1.3, 2026-09-04)**: un agente puede
+  entrar en loop hasta alcanzar `steps: 25` (límite duro nativo). Sin
+  detección de loops por contenido en runtime (M1.3 descartado).
+  Mitigaciones vigentes (M1.2, ADR-0013): `subagent_depth=1`,
+  `task: deny` en especialistas, `steps=25`, máximo 2 especialistas
+  concurrentes, tareas acotadas, fail-fast y handoffs estructurados.
 - **Subagente `domain` NO DISPONIBLE temporalmente** (2026-09-01): el
   subagente `domain` produce respuestas vacías o degenerativas
   (repetitivas/incoherentes) al ejecutarse como child session en OpenCode.
@@ -87,8 +101,15 @@
 
 ## Next gate
 
-- **M1.2 completado (2026-09-03)**: endurecimiento del runtime multiagente
-  (ADR-0013). Phase 2 NO reanudada hasta nuevo aviso del usuario.
+- **M1.2 = baseline operativo vigente** (2026-09-03, ADR-0013).
+- **M1.3 = experimento NO OPERATIVO / descartado para uso** (2026-09-04):
+  el circuit breaker no intercepta realmente Shell en runtime (validación
+  end-to-end real falló: #1 EXECUTED, #2 EXECUTED, #3 EXECUTED). No se
+  continuará su investigación. Riesgo residual: loops hasta `steps: 25`
+  (mitigado por las salvaguardas M1.2).
+- **Preparado para reanudar Phase 2** (pendiente de instrucción del
+  usuario): trabajo previo de Phase 2 en `docs/design/` preservado intacto.
+  Phase 2 NO reanudada hasta nuevo aviso del usuario.
 - Phase 1 COMPLETADA (M1 cerrado). Orden de orquestación del director:
   1. DOMAIN -> baseline funcional (docs/requirements/). [ACCEPTED]
   2. ARCHITECT -> arquitectura + contratos API + ADRs (docs/architecture/,

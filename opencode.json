@@ -3,7 +3,7 @@
   "default_agent": "director",
   "subagent_depth": 1,
   "instructions": ["AGENTS.md"],
-  "plugin": [".opencode/plugin/tools.js", ".opencode/plugin/circuit-breaker.js"],
+  "plugin": [".opencode/plugin/tools.js"],
   "agent": {
     "architect": { "steps": 25, "permission": { "task": "deny" } },
     "database": { "steps": 25, "permission": { "task": "deny" } },
