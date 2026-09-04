@@ -201,3 +201,130 @@ def test_get_document_isolation_returns_404(client: TestClient, auth_headers, db
     # Try to access user A's document
     response = client.get(f"/api/v1/documents/{doc_id}", headers=headers_b)
     assert response.status_code == 404
+
+
+# ─── V1-S2: verify-fingerprint ───────────────────────────────────────────────
+
+
+def test_verify_fingerprint_matches(client: TestClient, auth_headers):
+    """Verify fingerprint of a valid document returns matches=true."""
+    upload_response = _upload(client, PDF_CONTENT, "test.pdf", auth_headers)
+    assert upload_response.status_code == 202
+    doc_id = upload_response.json()["id"]
+
+    response = client.post(
+        f"/api/v1/documents/{doc_id}/verify-fingerprint",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["matches"] is True
+    assert data["fingerprint"] == hashlib.sha256(PDF_CONTENT).hexdigest()
+
+
+def test_verify_fingerprint_not_found_returns_404(client: TestClient, auth_headers):
+    """Verify fingerprint of a non-existent document returns 404."""
+    fake_id = str(uuid.uuid4())
+    response = client.post(
+        f"/api/v1/documents/{fake_id}/verify-fingerprint",
+        headers=auth_headers,
+    )
+    assert response.status_code == 404
+
+
+def test_verify_fingerprint_isolation_returns_404(client: TestClient, auth_headers, db_session):
+    """User from org B cannot verify fingerprint of org A's document."""
+    upload_response = _upload(client, PDF_CONTENT, "test.pdf", auth_headers)
+    assert upload_response.status_code == 202
+    doc_id = upload_response.json()["id"]
+
+    import bcrypt
+    from backend.models import Organization, User
+    import uuid as uuid_mod
+
+    org_b = Organization(id=uuid_mod.uuid4(), name="Org B", state="active")
+    user_b = User(
+        id=uuid_mod.uuid4(),
+        organization_id=org_b.id,
+        username="userb2",
+        email="b2@example.com",
+        password_hash=bcrypt.hashpw(b"pass123", bcrypt.gensalt()).decode("utf-8"),
+        role="reader",
+        state="active",
+    )
+    db_session.add(org_b)
+    db_session.add(user_b)
+    db_session.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "userb2", "password": "pass123"},
+    )
+    assert login_response.status_code == 200
+    token_b = login_response.json()["token"]
+    headers_b = {"Authorization": f"Bearer {token_b}"}
+
+    response = client.post(
+        f"/api/v1/documents/{doc_id}/verify-fingerprint",
+        headers=headers_b,
+    )
+    assert response.status_code == 404
+
+
+# ─── V1-S2: download content ─────────────────────────────────────────────────
+
+
+def test_get_content_returns_file(client: TestClient, auth_headers):
+    """Download document content returns the original bytes."""
+    upload_response = _upload(client, PDF_CONTENT, "test.pdf", auth_headers)
+    assert upload_response.status_code == 202
+    doc_id = upload_response.json()["id"]
+
+    response = client.get(f"/api/v1/documents/{doc_id}/content", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.content == PDF_CONTENT
+    assert "Content-Disposition" in response.headers
+    assert "ETag" in response.headers
+
+
+def test_get_content_not_found_returns_404(client: TestClient, auth_headers):
+    """Download content of a non-existent document returns 404."""
+    fake_id = str(uuid.uuid4())
+    response = client.get(f"/api/v1/documents/{fake_id}/content", headers=auth_headers)
+    assert response.status_code == 404
+
+
+def test_get_content_isolation_returns_404(client: TestClient, auth_headers, db_session):
+    """User from org B cannot download org A's document content."""
+    upload_response = _upload(client, PDF_CONTENT, "test.pdf", auth_headers)
+    assert upload_response.status_code == 202
+    doc_id = upload_response.json()["id"]
+
+    import bcrypt
+    from backend.models import Organization, User
+    import uuid as uuid_mod
+
+    org_b = Organization(id=uuid_mod.uuid4(), name="Org B", state="active")
+    user_b = User(
+        id=uuid_mod.uuid4(),
+        organization_id=org_b.id,
+        username="userb3",
+        email="b3@example.com",
+        password_hash=bcrypt.hashpw(b"pass123", bcrypt.gensalt()).decode("utf-8"),
+        role="reader",
+        state="active",
+    )
+    db_session.add(org_b)
+    db_session.add(user_b)
+    db_session.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "userb3", "password": "pass123"},
+    )
+    assert login_response.status_code == 200
+    token_b = login_response.json()["token"]
+    headers_b = {"Authorization": f"Bearer {token_b}"}
+
+    response = client.get(f"/api/v1/documents/{doc_id}/content", headers=headers_b)
+    assert response.status_code == 404

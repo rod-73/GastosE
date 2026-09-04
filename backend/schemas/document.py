@@ -1,4 +1,4 @@
-"""Pydantic schemas for document endpoints (V1-S1)."""
+"""Pydantic schemas for document endpoints (V1-S1 + V1-S2)."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -39,3 +39,10 @@ class DocumentResponse(BaseModel):
     failure_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+
+class FingerprintVerifyResponse(BaseModel):
+    """Response for ``POST /api/v1/documents/{id}/verify-fingerprint`` (V1-S2)."""
+
+    fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    matches: bool

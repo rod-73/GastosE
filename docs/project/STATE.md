@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 completada; V1-S2 pendiente)
+- **Phase**: 2 — Implementation (V1-S1 + V1-S2 completadas; V2-S1 pendiente)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V1-S1 implementada, testada y validada. Backend FastAPI + SQLAlchemy + Alembic. 41 tests passing. Quality gate superado.)
+- **Updated**: 2026-09-04 (por director: V1-S2 implementada. Endpoints verify-fingerprint + content download. 47 tests passing. Quality gate superado.)
 
 ## Current architecture
 
@@ -32,17 +32,23 @@
 
 ## Current implementation state
 
-- **V1-S1 IMPLEMENTADA** (2026-09-04, por director):
-  - `backend/`: FastAPI app con auth (login/logout), documents (upload/get),
-    middleware de autenticación (Bearer token opaco), exception handlers
-    (RFC 7807), services (auth, document), models (ORM SQLAlchemy),
-    schemas (Pydantic), config (pydantic-settings), utils (uuid7 fallback).
+- **V1-S1 + V1-S2 IMPLEMENTADAS** (2026-09-04, por director):
+  - `backend/`: FastAPI app con auth (login/logout), documents (upload/get/
+    verify-fingerprint/content), middleware de autenticación (Bearer token
+    opaco), exception handlers (RFC 7807), services (auth, document),
+    models (ORM SQLAlchemy), schemas (Pydantic), config (pydantic-settings),
+    utils (uuid7 fallback).
   - `alembic/`: 2 migraciones (0001 foundation, 0002 V1-S1 document
     ingestion). Chain: base -> 0001 -> 0002 (head).
-  - `tests/`: 41 tests passing (health, auth, documents, models, security).
+  - `tests/`: 47 tests passing (health, auth, documents, models, security).
     2 skipped (PostgreSQL CHECK constraints no aplicables en SQLite).
   - `requirements.txt`: fastapi, uvicorn, sqlalchemy, alembic, bcrypt,
     pydantic-settings, python-multipart.
+  - V1-S2 endpoints:
+    - `POST /api/v1/documents/{id}/verify-fingerprint`: verifica integridad
+      (NFR-3). Re-lee el archivo, calcula SHA-256, compara con BD.
+    - `GET /api/v1/documents/{id}/content`: descarga binaria con
+      Content-Disposition, ETag (fingerprint), Content-Type por formato.
   - Decisiones de implementación:
     - SQLAlchemy síncrono (sin driver async disponible).
     - Engine lazy (`get_engine()`, `get_session_local()`) para evitar
@@ -53,6 +59,7 @@
     - Token opaco (SHA-256 hash en BD, ADR-0009).
     - bcrypt directo (passlib incompatible con bcrypt 5.0).
     - Settings sin cache (re-reads env vars; overhead negligible en prod).
+    - StreamingResponse para descarga (chunked, 64KB).
 - Modelo de persistencia conceptual completado en `docs/persistence/`
   (PHASE1-003, agente database): 7 archivos (README + 6 secciones).
 - Threat review temprano completado (PHASE1-004, agente security, read-only):
@@ -122,6 +129,8 @@
 - **M1.3 = experimento NO OPERATIVO / descartado para uso** (2026-09-04).
 - **V1-S1 COMPLETADA** (2026-09-04): implementación, tests, migraciones,
   security invariants verificados. Quality gate superado.
-- **Próximo paso**: V1-S2 (ver docs/project/VERTICAL-SLICES.md).
+- **V1-S2 COMPLETADA** (2026-09-04): verify-fingerprint + content download.
+  47 tests passing. Quality gate superado.
+- **Próximo paso**: V2-S1 (extracción, ver docs/project/VERTICAL-SLICES.md).
 - Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 en curso: V1-S1 ACCEPTED.
+- Phase 2 en curso: V1-S1 + V1-S2 ACCEPTED.

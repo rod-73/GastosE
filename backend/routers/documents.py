@@ -1,8 +1,9 @@
-"""Document endpoints (V1-S1): upload + retrieve."""
+"""Document endpoints (V1-S1 + V1-S2): upload, retrieve, verify, download."""
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import uuid
 from typing import Optional
 
@@ -16,16 +17,22 @@ from fastapi import (
     Response,
     UploadFile,
 )
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from backend.config import get_settings
 from backend.database import get_db
 from backend.exceptions import NotFoundException
 from backend.middleware.auth import get_session, require_role
 from backend.models.idempotency_key import IdempotencyKey
 from backend.models.session import Session
 from backend.models.document import SourceDocument
-from backend.schemas.document import DocumentResponse, DocumentUploadResponse
+from backend.schemas.document import (
+    DocumentResponse,
+    DocumentUploadResponse,
+    FingerprintVerifyResponse,
+)
 from backend.services import document_service
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
@@ -159,4 +166,103 @@ def get_document(
         failure_reason=document.failure_reason,
         created_at=document.created_at,
         updated_at=document.updated_at,
+    )
+
+
+@router.post(
+    "/{document_id}/verify-fingerprint",
+    response_model=FingerprintVerifyResponse,
+    dependencies=[Depends(require_role("reader"))],
+)
+def verify_fingerprint(
+    document_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> FingerprintVerifyResponse:
+    """Verify document integrity by re-reading the stored file (NFR-3, V1-S2).
+
+    Re-computes the SHA-256 of the stored file and compares it with the
+    fingerprint recorded in the database. Returns ``matches: true/false``.
+    """
+    # Verify the document exists and belongs to the caller's org.
+    document = (
+        db.execute(
+            select(SourceDocument).where(
+                SourceDocument.id == document_id,
+                SourceDocument.owner_id == session.organization_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if document is None:
+        raise NotFoundException("Document")
+
+    matches = document_service.verify_fingerprint(
+        document_id=document_id,
+        owner_id=session.organization_id,
+        db=db,
+    )
+    return FingerprintVerifyResponse(
+        fingerprint=document.fingerprint_sha256,
+        matches=matches,
+    )
+
+
+@router.get(
+    "/{document_id}/content",
+    dependencies=[Depends(require_role("reader"))],
+)
+def get_document_content(
+    document_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> StreamingResponse:
+    """Download the binary content of a source document (V1-S2).
+
+    Returns the file with ``Content-Type: application/octet-stream`` and
+    ``Content-Disposition: attachment; filename="<safe_name>"``.
+    """
+    # Verify the document exists and belongs to the caller's org.
+    document = (
+        db.execute(
+            select(SourceDocument).where(
+                SourceDocument.id == document_id,
+                SourceDocument.owner_id == session.organization_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if document is None:
+        raise NotFoundException("Document")
+
+    settings = get_settings()
+    path = os.path.join(
+        settings.DOCUMENT_STORAGE_PATH,
+        str(session.organization_id),
+        document.fingerprint_sha256,
+    )
+    if not os.path.isfile(path):
+        raise NotFoundException("Document content")
+
+    # Determine content type from format_detected.
+    content_type_map = {
+        "pdf_text": "application/pdf",
+        "xml": "application/xml",
+        "image": "application/octet-stream",
+    }
+    content_type = content_type_map.get(document.format_detected, "application/octet-stream")
+
+    def _iter_file():
+        with open(path, "rb") as fh:
+            yield from iter(lambda: fh.read(65536), b"")
+
+    return StreamingResponse(
+        _iter_file(),
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{document.safe_name}"',
+            "ETag": f'"{document.fingerprint_sha256}"',
+        },
     )
