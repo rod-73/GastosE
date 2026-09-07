@@ -25,6 +25,12 @@ from backend.models import (  # noqa: E402,F401
 
 config = context.config
 
+# Allow DATABASE_URL env var to override the URL in alembic.ini
+# (needed for Docker where the DB host is 'postgres', not 'localhost')
+_db_url = os.environ.get("DATABASE_URL")
+if _db_url:
+    config.set_main_option("sqlalchemy.url", _db_url)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

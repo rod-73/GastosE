@@ -6,7 +6,7 @@ version: "3.8"
 services:
   # PostgreSQL database
   postgres:
-    image: postgres:15-alpine
+    image: docker.io/library/postgres:15-alpine
     container_name: gastose-postgres
     environment:
       POSTGRES_DB: gastose
@@ -52,11 +52,10 @@ services:
 
   # Frontend (static files served by nginx)
   frontend:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
     container_name: gastose-frontend
-    volumes:
-      - ./frontend:/usr/share/nginx/html:ro
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "3000:80"
     depends_on:

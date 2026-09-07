@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("document_number", sa.Text(), nullable=True),
         sa.Column("document_date", sa.Date(), nullable=True),
         sa.Column("registered_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("currency", sa.Char(length=3), nullable=False),
+        sa.Column("currency", sa.String(length=3), nullable=False),
         sa.Column("base_total", sa.Numeric(precision=14, scale=2), nullable=True),
         sa.Column("vat_total", sa.Numeric(precision=14, scale=2), nullable=True),
         sa.Column("withholding_total", sa.Numeric(precision=14, scale=2), nullable=True),

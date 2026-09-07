@@ -68,7 +68,7 @@ def upgrade() -> None:
     # currencies (global catalog)
     op.create_table(
         "currencies",
-        sa.Column("code", sa.Char(length=3), primary_key=True),
+        sa.Column("code", sa.String(length=3), primary_key=True),
         sa.Column("name", sa.Text(), nullable=False),
         sa.Column("decimals", sa.Integer(), nullable=False, server_default="2"),
         sa.CheckConstraint("decimals >= 0 AND decimals <= 4", name="chk_currency_decimals"),
@@ -76,7 +76,7 @@ def upgrade() -> None:
 
     # Seed currencies
     op.bulk_insert(
-        sa.table("currencies", sa.column("code", sa.Char), sa.column("name", sa.Text), sa.column("decimals", sa.Integer)),
+        sa.table("currencies", sa.column("code", sa.String), sa.column("name", sa.Text), sa.column("decimals", sa.Integer)),
         [
             {"code": "EUR", "name": "Euro", "decimals": 2},
             {"code": "USD", "name": "US Dollar", "decimals": 2},

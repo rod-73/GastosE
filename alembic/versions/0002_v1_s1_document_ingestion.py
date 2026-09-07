@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("owner_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("safe_name", sa.Text(), nullable=False),
         sa.Column("original_filename", sa.Text(), nullable=True),
-        sa.Column("fingerprint_sha256", sa.Char(length=64), nullable=False),
+        sa.Column("fingerprint_sha256", sa.String(length=64), nullable=False),
         sa.Column("doc_type", sa.Text(), nullable=False),
         sa.Column("format_detected", sa.Text(), nullable=False),
         sa.Column("size_bytes", sa.BigInteger(), nullable=False),
@@ -63,10 +63,11 @@ def upgrade() -> None:
     op.create_index("idx_docs_owner", "source_documents", ["owner_id"])
     op.create_index("idx_docs_owner_state", "source_documents", ["owner_id", "state"])
     op.create_index("idx_docs_owner_date", "source_documents", ["owner_id", sa.text("uploaded_at DESC")])
-    op.create_unique_index(
+    op.create_index(
         "uq_docs_owner_fingerprint",
         "source_documents",
         ["owner_id", "fingerprint_sha256"],
+        unique=True,
     )
     op.create_index("idx_docs_dup_key", "source_documents", ["owner_id", "dup_key"])
 
@@ -76,7 +77,7 @@ def upgrade() -> None:
         sa.Column("id", sa.dialects.postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("owner_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("document_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("document_fingerprint", sa.Char(length=64), nullable=False),
+        sa.Column("document_fingerprint", sa.String(length=64), nullable=False),
         sa.Column("format_detected", sa.Text(), nullable=False),
         sa.Column("state", sa.Text(), nullable=False, server_default="pending"),
         sa.Column("claimed_by", sa.dialects.postgresql.UUID(as_uuid=True), nullable=True),
