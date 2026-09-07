@@ -317,61 +317,157 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
 
     # Total amount: flexible patterns.
     # "Total a pagar 25,06 EUR", "Total: 25.06", "Importe Total: 25,06"
+    # Strategy:
+    # 1. Look for "TOTAL GENERAL" line and extract the LAST number (total with VAT).
+    # 2. Fallback: find ALL "Total" matches and pick the largest.
+    total_amount_value = None
+    
+    # 1. TOTAL GENERAL line: "TOTAL GENERAL (Euros) 515,82 122,05 637,87"
+    # The last number is the total with VAT.
     m = re.search(
-        r"(?:Total\s*(?:a\s*pagar|final|general)?|Importe\s*Total|Grand\s*Total|Total)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
+        r"TOTAL\s*GENERAL[^\n]*?([\d.,]+)\s*([\d.,]+)\s*([\d.,]+)",
         text,
         re.IGNORECASE,
     )
     if m:
+        # Take the last number (total with VAT).
+        total_amount_value = m.group(3).strip()
+    
+    if not total_amount_value:
+        # 2. Fallback: find ALL "Total" matches and pick the largest.
+        total_matches = re.findall(
+            r"(?:Total\s*(?:a\s*pagar|final|general)?|Importe\s*Total|Grand\s*Total|Total)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
+            text,
+            re.IGNORECASE,
+        )
+        if total_matches:
+            def _parse_amount(s: str) -> float:
+                try:
+                    return float(s.replace(",", "."))
+                except ValueError:
+                    return 0.0
+            total_amount_value = max(total_matches, key=_parse_amount)
+    
+    if total_amount_value:
         fields["total_amount"] = _make_field(
-            m.group(1).strip(), 0.80, method, "regex:total"
+            total_amount_value, 0.80, method, "regex:total"
         )
 
     # Base amount: flexible patterns.
     # "Total (base imponible) 20,71 EUR", "Base: 20.71", "Net Amount: 20,71"
+    # Strategy:
+    # 1. Look for "TOTAL GENERAL" line and extract the FIRST number (base amount).
+    # 2. Fallback: look for explicit "Base imponible" patterns.
+    base_amount_value = None
+    
+    # 1. TOTAL GENERAL line: "TOTAL GENERAL (Euros) 515,82 122,05 637,87"
+    # The first number is the base amount.
     m = re.search(
-        r"(?:Total\s*\(base\s*imponible\)|Base\s*(?:imponible)?|Net\s*Amount|Subtotal)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
+        r"TOTAL\s*GENERAL[^\n]*?([\d.,]+)\s*([\d.,]+)\s*([\d.,]+)",
         text,
         re.IGNORECASE,
     )
     if m:
+        # Take the first number (base amount).
+        base_amount_value = m.group(1).strip()
+    
+    if not base_amount_value:
+        # 2. Fallback: look for explicit "Base imponible" patterns.
+        m = re.search(
+            r"(?:Total\s*\(base\s*imponible\)|Base\s*(?:imponible)?|Net\s*Amount|Subtotal)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
+            text,
+            re.IGNORECASE,
+        )
+        if m:
+            base_amount_value = m.group(1).strip()
+    
+    if base_amount_value:
         fields["base_amount"] = _make_field(
-            m.group(1).strip(), 0.75, method, "regex:base"
+            base_amount_value, 0.75, method, "regex:base"
         )
 
     # VAT rate: flexible patterns.
     # "IVA (21,0 %)", "VAT: 21%", "Tax Rate: 21.0%", "21,0 %"
+    # Strategy:
+    # 1. Look for "IVA GENERAL" line and extract the rate.
+    # 2. Fallback: find ALL VAT rate matches and pick the highest.
+    vat_rate_value = None
+    
+    # 1. IVA GENERAL line: " IVA GENERAL 21% 581,19 122,05 703,24"
     m = re.search(
-        r"(?:IVA|VAT|Tax\s*Rate|Tipo\s*IVA)\s*\(?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%\s*\)?",
+        r"IVA\s*GENERAL\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%",
         text,
         re.IGNORECASE,
     )
     if m:
-        fields["vat_rate"] = _make_field(
-            m.group(1).strip(), 0.75, method, "regex:vat_rate"
+        vat_rate_value = m.group(1).strip()
+    
+    if not vat_rate_value:
+        # 2. Fallback: find ALL VAT rate matches and pick the highest.
+        vat_rate_matches = re.findall(
+            r"(?:IVA|VAT|Tax\s*Rate|Tipo\s*IVA)\s*\(?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%\s*\)?",
+            text,
+            re.IGNORECASE,
         )
-    else:
-        # Fallback: look for percentage near "IVA" or "VAT".
+        if vat_rate_matches:
+            def _parse_rate(s: str) -> float:
+                try:
+                    return float(s.replace(",", "."))
+                except ValueError:
+                    return 0.0
+            vat_rate_value = max(vat_rate_matches, key=_parse_rate)
+    
+    if not vat_rate_value:
+        # 3. Fallback: look for percentage near "IVA" or "VAT".
         m = re.search(
             r"(?:IVA|VAT)[^\d]*(\d{1,2}(?:[.,]\d{1,2})?)\s*%",
             text,
             re.IGNORECASE,
         )
         if m:
-            fields["vat_rate"] = _make_field(
-                m.group(1).strip(), 0.70, method, "regex:vat_rate_fallback"
-            )
+            vat_rate_value = m.group(1).strip()
+    
+    if vat_rate_value:
+        fields["vat_rate"] = _make_field(
+            vat_rate_value, 0.75, method, "regex:vat_rate"
+        )
 
     # VAT amount: flexible patterns.
     # "+ IVA (21,0 %) 4,35 EUR", "VAT: 4.35", "Tax Amount: 4,35"
+    # Strategy:
+    # 1. Look for "TOTAL GENERAL" line and extract the MIDDLE number (VAT amount).
+    # 2. Fallback: find ALL VAT amount matches and pick the largest.
+    vat_amount_value = None
+    
+    # 1. TOTAL GENERAL line: "TOTAL GENERAL (Euros) 515,82 122,05 637,87"
+    # The middle number is the VAT amount.
     m = re.search(
-        r"(?:\+\s*)?(?:IVA|VAT|Tax\s*Amount|Importe\s*IVA)\s*\(?\s*(?:\d{1,2}(?:[.,]\d{1,2})?\s*%\s*\)?)?\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
+        r"TOTAL\s*GENERAL[^\n]*?([\d.,]+)\s*([\d.,]+)\s*([\d.,]+)",
         text,
         re.IGNORECASE,
     )
     if m:
+        # Take the middle number (VAT amount).
+        vat_amount_value = m.group(2).strip()
+    
+    if not vat_amount_value:
+        # 2. Fallback: find ALL VAT amount matches and pick the largest.
+        vat_amount_matches = re.findall(
+            r"(?:\+\s*)?(?:IVA|VAT|Tax\s*Amount|Importe\s*IVA)\s*\(?\s*(?:\d{1,2}(?:[.,]\d{1,2})?\s*%\s*\)?)?\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
+            text,
+            re.IGNORECASE,
+        )
+        if vat_amount_matches:
+            def _parse_amount_vat(s: str) -> float:
+                try:
+                    return float(s.replace(",", "."))
+                except ValueError:
+                    return 0.0
+            vat_amount_value = max(vat_amount_matches, key=_parse_amount_vat)
+    
+    if vat_amount_value:
         fields["vat_amount"] = _make_field(
-            m.group(1).strip(), 0.75, method, "regex:vat_amount"
+            vat_amount_value, 0.75, method, "regex:vat_amount"
         )
 
     # Currency: prefer currency associated with amounts/totals.
