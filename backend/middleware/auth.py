@@ -31,7 +31,7 @@ ROLE_ORDER: dict[str, int] = {
 }
 
 # Paths that do not require authentication.
-PUBLIC_PATHS = {"/healthz", "/api/v1/auth/login"}
+PUBLIC_PATHS = {"/", "/healthz", "/api/v1/auth/login"}
 
 
 def _problem(status_code: int, code: str, message: str) -> JSONResponse:

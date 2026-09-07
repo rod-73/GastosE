@@ -13,7 +13,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from backend.exceptions import GastosEException
 from backend.middleware.auth import auth_middleware
@@ -114,6 +114,15 @@ def create_app() -> FastAPI:
     def healthz() -> dict:
         """Liveness probe."""
         return {"status": "ok"}
+
+    # Root: redirect to frontend.
+    @app.get("/", tags=["health"])
+    def root(request: Request) -> RedirectResponse:
+        """Redirect to the frontend UI (port 3000 by default)."""
+        host = request.headers.get("host", "localhost:8000")
+        # Replace backend port with frontend port
+        frontend_host = host.replace(":8000", ":3000") if ":8000" in host else "localhost:3000"
+        return RedirectResponse(url=f"http://{frontend_host}/", status_code=302)
 
     return app
 
