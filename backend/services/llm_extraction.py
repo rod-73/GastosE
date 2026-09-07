@@ -79,6 +79,26 @@ Invoice text:
 ---
 """
 
+EXTRACTION_USER_TEMPLATE_VISION = """Extract the following fields from this invoice image.
+For each field, return the value as a string. If a field is not present, use null.
+
+Fields to extract:
+{fields_list}
+
+Rules:
+- Dates: ISO-8601 format (YYYY-MM-DD).
+- Amounts: numeric with dot decimal separator (e.g., "25.06").
+- VAT rate: numeric percentage (e.g., "21" for 21%).
+- If VAT is 0%%, set vat_rate to "0" and vat_amount to "0".
+- If base amount is not stated but VAT is 0%%, base_amount equals total_amount.
+- Currency: ISO-4217 code (EUR, USD, GBP, etc.).
+- Extract values exactly as they appear in the document (do not convert formats).
+
+Return a JSON object with exactly these keys: {json_keys}
+
+The invoice is provided as an image attachment.
+"""
+
 
 # --- Core abstraction ---
 
@@ -176,8 +196,9 @@ def should_use_llm(regex_result: Dict[str, Any]) -> bool:
 def extract_with_llm(
     invoice_text: str,
     missing_fields: List[str],
+    image_base64: Optional[str] = None,
 ) -> LLMExtractionResult:
-    """Invoke the LLM to extract missing fields from invoice text.
+    """Invoke the LLM to extract missing fields from invoice text or image.
 
     This is the core of the ExtractionLLM abstraction (ADR-0010).
     Provider-neutral: uses OpenAI-compatible chat completions API.
@@ -185,6 +206,8 @@ def extract_with_llm(
     Args:
         invoice_text: Full text extracted from the document.
         missing_fields: List of field names to extract.
+        image_base64: Optional base64-encoded image (for scanned PDFs).
+            When provided, the LLM is invoked in vision mode.
 
     Returns:
         LLMExtractionResult with extracted fields (only valid ones).
@@ -199,11 +222,31 @@ def extract_with_llm(
     # Build prompt.
     fields_list = "\n".join(f"- {f}" for f in missing_fields)
     json_keys = json.dumps(missing_fields)
-    user_prompt = EXTRACTION_USER_TEMPLATE.format(
-        fields_list=fields_list,
-        json_keys=json_keys,
-        invoice_text=invoice_text[: settings.LLM_MAX_INPUT_CHARS],
-    )
+
+    if image_base64:
+        # Vision mode: send image instead of text.
+        user_prompt = EXTRACTION_USER_TEMPLATE_VISION.format(
+            fields_list=fields_list,
+            json_keys=json_keys,
+        )
+        # OpenAI-compatible vision message format.
+        user_content = [
+            {"type": "text", "text": user_prompt},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{image_base64}"
+                },
+            },
+        ]
+    else:
+        # Text mode.
+        user_prompt = EXTRACTION_USER_TEMPLATE.format(
+            fields_list=fields_list,
+            json_keys=json_keys,
+            invoice_text=invoice_text[: settings.LLM_MAX_INPUT_CHARS],
+        )
+        user_content = user_prompt
 
     # Build request.
     url = settings.LLM_ENDPOINT.rstrip("/") + "/chat/completions"
@@ -215,7 +258,7 @@ def extract_with_llm(
         "model": settings.LLM_MODEL,
         "messages": [
             {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
+            {"role": "user", "content": user_content},
         ],
         "temperature": 0.1,
         "max_tokens": 500,

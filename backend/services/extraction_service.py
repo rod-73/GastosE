@@ -216,6 +216,8 @@ def process_job(job: ExtractionJob, db: DbSession) -> Extraction:
     # the LLM is invoked with the full document context to extract the
     # complete set of fields. Reconciliation preserves valid deterministic
     # values. Never breaks the pipeline.
+    # For scanned PDFs (no text layer), the first page is converted to an
+    # image and sent to the LLM in vision mode.
     if isinstance(raw_output, dict) and "_error" not in raw_output:
         from backend.services.extraction_quality import should_invoke_llm
         from backend.services.llm_extraction import (
@@ -244,7 +246,25 @@ def process_job(job: ExtractionJob, db: DbSession) -> Extraction:
             invoice_text = _get_document_text(content, job.format_detected)
 
             if invoice_text:
+                # Text-based LLM extraction.
                 llm_result = extract_with_llm(invoice_text, fields_to_extract)
+            else:
+                # No text: try vision mode (scanned PDF).
+                image_base64 = _pdf_page_to_image_base64(content)
+                if image_base64:
+                    logger.info(
+                        "No text layer found; using vision mode for LLM extraction"
+                    )
+                    llm_result = extract_with_llm(
+                        "", fields_to_extract, image_base64=image_base64
+                    )
+                else:
+                    logger.warning(
+                        "No text layer and no image available for LLM extraction"
+                    )
+                    llm_result = None
+
+            if llm_result is not None:
                 if llm_result.success and llm_result.fields:
                     raw_output = merge_llm_results(raw_output, llm_result)
                     logger.info(
@@ -435,6 +455,44 @@ def _get_document_text(content: bytes, format_detected: str) -> str:
     except Exception as e:
         logger.warning("Failed to extract document text for LLM: %s", e)
         return ""
+
+
+def _pdf_page_to_image_base64(content: bytes, dpi: int = 200) -> Optional[str]:
+    """Convert the first page of a PDF to a base64-encoded JPEG image.
+
+    Used for vision-based LLM extraction of scanned PDFs.
+
+    Args:
+        content: Raw PDF bytes.
+        dpi: Resolution for the rendered image (default 200).
+
+    Returns:
+        Base64-encoded JPEG string, or None if conversion fails.
+    """
+    try:
+        import base64
+        import fitz  # PyMuPDF
+    except ImportError:
+        logger.warning("PyMuPDF not available for PDF-to-image conversion")
+        return None
+
+    try:
+        doc = fitz.open(stream=content, filetype="pdf")
+        if doc.page_count == 0:
+            doc.close()
+            return None
+
+        # Render the first page.
+        page = doc.load_page(0)
+        mat = fitz.Matrix(dpi / 72, dpi / 72)
+        pix = page.get_pixmap(matrix=mat)
+        image_bytes = pix.tobytes("jpeg")
+        doc.close()
+
+        return base64.b64encode(image_bytes).decode("ascii")
+    except Exception as e:
+        logger.warning("Failed to convert PDF page to image: %s", e)
+        return None
 
 
 def reap_expired_leases(db: DbSession) -> int:
