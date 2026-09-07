@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     SESSION_EXPIRY_DAYS: int = 30
     SECRET_KEY: str = "change-me-in-production"
 
+    # LLM extraction fallback (ADR-0010: provider-neutral abstraction).
+    # All parameters configurable via environment; no hardcoded provider.
+    LLM_ENDPOINT: str = ""  # OpenAI-compatible endpoint URL
+    LLM_MODEL: str = ""  # Model identifier
+    LLM_API_KEY: str = ""  # API key (empty for local/no-auth)
+    LLM_TIMEOUT_SECONDS: int = 30  # Request timeout
+    LLM_MAX_RETRIES: int = 2  # Retry attempts on transient errors
+    LLM_MAX_INPUT_CHARS: int = 8000  # Max chars of document text sent to LLM
+    LLM_ENABLED: bool = True  # Master switch for LLM fallback
+
 
 def get_settings() -> Settings:
     """Return the settings instance (re-reads env vars each call).

@@ -304,8 +304,9 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
 
     # Invoice date: flexible patterns.
     # "Fecha de facturación: 02/09/26", "Date: 2026-09-02", "Fecha: 02/09/2026"
+    # Also handles: "7/9/2026" (D/M/YYYY without leading zeros)
     m = re.search(
-        r"(?:Fecha\s*(?:de\s*facturaci[oó]n)?|Date|Fecha\s*factura)\s*[:\-]?\s*(\d{4}-\d{2}-\d{2}|\d{2}[/-]\d{2}[/-]\d{2,4})",
+        r"(?:Fecha\s*(?:de\s*facturaci[oó]n|de\s*emisi[oó]n)?|Date|Fecha\s*factura)\s*[:\-]?\s*(\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
         text,
         re.IGNORECASE,
     )

@@ -211,6 +211,41 @@ def process_job(job: ExtractionJob, db: DbSession) -> Extraction:
             db,
         )
 
+    # 4.5. LLM fallback (ADR-0010): if deterministic extraction is incomplete,
+    # invoke LLM to fill missing fields. Never breaks the pipeline.
+    if isinstance(raw_output, dict) and "_error" not in raw_output:
+        from backend.services.llm_extraction import (
+            should_use_llm,
+            find_missing_fields,
+            extract_with_llm,
+            merge_llm_results,
+        )
+
+        if should_use_llm(raw_output):
+            missing = find_missing_fields(raw_output)
+            logger.info(
+                "Deterministic extraction incomplete (missing: %s); trying LLM fallback",
+                missing,
+            )
+
+            # Extract text from document for LLM input.
+            invoice_text = _get_document_text(content, job.format_detected)
+
+            if invoice_text:
+                llm_result = extract_with_llm(invoice_text, missing)
+                if llm_result.success and llm_result.fields:
+                    raw_output = merge_llm_results(raw_output, llm_result)
+                    logger.info(
+                        "LLM fallback added %d fields: %s (model: %s)",
+                        llm_result.field_count,
+                        list(llm_result.fields.keys()),
+                        llm_result.model,
+                    )
+                elif not llm_result.success:
+                    logger.warning(
+                        "LLM fallback failed (non-fatal): %s", llm_result.error
+                    )
+
     # 5. Validate output against strict schema.
     result = validate_extraction_output(raw_output, method_name)
 
@@ -366,6 +401,28 @@ def _fail_job(
         db.commit()
 
     return extraction
+
+
+def _get_document_text(content: bytes, format_detected: str) -> str:
+    """Extract text content from document for LLM input.
+
+    For PDF: uses pypdf to extract text layer.
+    For XML: returns the raw XML as text.
+    For other formats: attempts UTF-8 decode.
+
+    Returns empty string if no text could be extracted.
+    """
+    try:
+        if format_detected in ("pdf", "pdf_text", "pdf_scanned"):
+            from backend.services.extraction_methods import _extract_pdf_text_with_pypdf
+            return _extract_pdf_text_with_pypdf(content) or ""
+        elif format_detected == "xml":
+            return content.decode("utf-8", errors="ignore")
+        else:
+            return content.decode("utf-8", errors="ignore")
+    except Exception as e:
+        logger.warning("Failed to extract document text for LLM: %s", e)
+        return ""
 
 
 def reap_expired_leases(db: DbSession) -> int:
