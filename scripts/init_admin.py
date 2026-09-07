@@ -92,9 +92,33 @@ def main() -> int:
             conn.commit()
             print(f"Usuario admin creado ({user_id})")
 
+        # Verificar si ya existe tasa de IVA 21%
+        result = conn.execute(
+            text("SELECT id FROM tax_rates WHERE owner_id = :org_id AND code = :code"),
+            {"org_id": org_id, "code": "VAT-21"},
+        )
+        row = result.fetchone()
+
+        if row:
+            print(f"Tasa de IVA existente: VAT-21 ({row[0]})")
+        else:
+            rate_id = str(uuid.uuid4())
+            conn.execute(
+                text(
+                    "INSERT INTO tax_rates (id, owner_id, code, description, tax_type, "
+                    "percentage, valid_from, valid_until, jurisdiction, created_at, updated_at) "
+                    "VALUES (:id, :org_id, 'VAT-21', 'IVA 21%', 'vat', 21.00, "
+                    "'2020-01-01', NULL, 'ES', NOW(), NOW())"
+                ),
+                {"id": rate_id, "org_id": org_id},
+            )
+            conn.commit()
+            print(f"Tasa de IVA creada: VAT-21 (21%)")
+
     print("\n✓ Inicialización completada")
     print("  Usuario: admin")
     print("  Password: admin123")
+    print("  Tasa de IVA: VAT-21 (21%)")
     return 0
 
 
