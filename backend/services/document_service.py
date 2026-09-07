@@ -234,9 +234,10 @@ def upload_document(
             job.failure_reason = str(e)[:2000]  # Truncate long errors
             db.commit()
 
-    # 12. If extraction succeeded, run validation and create expense.
+    # 12. If extraction succeeded, run normalization, validation, and create expense.
     if extraction_id:
         try:
+            from backend.services import normalization_service
             from backend.services import validation_service
             from backend.services import expense_service
             from backend.models.extraction import Extraction
@@ -250,7 +251,19 @@ def upload_document(
                 .first()
             )
             if extraction:
-                # Run validation.
+                # Step 1: Normalize extracted values.
+                normalized_count, norm_failed = normalization_service.normalize_extraction(
+                    extraction_id=extraction_id,
+                    owner_id=owner_id,
+                    db=db,
+                )
+                logger.info(
+                    "Normalization completed: %d normalized, %d failed",
+                    normalized_count,
+                    norm_failed,
+                )
+
+                # Step 2: Validate normalized values.
                 passed, failed, warnings = validation_service.validate_extraction(
                     extraction_id=extraction_id,
                     owner_id=owner_id,
@@ -263,7 +276,7 @@ def upload_document(
                     warnings,
                 )
 
-                # If validation passed (no blocking errors), create expense.
+                # Step 3: If validation passed (no blocking errors), create expense.
                 if failed == 0:
                     expense = expense_service.create_expense_from_validation(
                         extraction_id=extraction_id,
@@ -285,7 +298,7 @@ def upload_document(
                     )
         except Exception as e:
             logger.error(
-                "Validation/expense creation failed for document %s: %s",
+                "Normalization/validation/expense creation failed for document %s: %s",
                 document.id,
                 e,
             )
