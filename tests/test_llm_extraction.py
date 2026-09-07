@@ -196,8 +196,29 @@ class TestShouldUseLLM:
 
 
 class TestExtractWithLLM:
-    @patch("backend.services.llm_extraction.requests.post")
-    def test_successful_extraction(self, mock_post, llm_settings):
+    def _mock_httpx_client(self, mock_client_cls, response_body, status_code=200):
+        """Helper to configure httpx.Client mock."""
+        mock_response = MagicMock()
+        mock_response.status_code = status_code
+        mock_response.text = json.dumps(response_body) if isinstance(response_body, dict) else str(response_body)
+        mock_response.json = MagicMock(return_value=response_body)
+        mock_response.raise_for_status = MagicMock()
+        if status_code >= 400:
+            import httpx
+            mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+                f"HTTP {status_code}",
+                request=MagicMock(),
+                response=mock_response,
+            )
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+        return mock_client
+
+    @patch("backend.services.llm_extraction.httpx.Client")
+    def test_successful_extraction(self, mock_client_cls, llm_settings):
         """LLM returns valid JSON with the requested fields."""
         llm_response = {
             "choices": [
@@ -213,11 +234,7 @@ class TestExtractWithLLM:
                 }
             ]
         }
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: llm_response,
-            raise_for_status=lambda: None,
-        )
+        self._mock_httpx_client(mock_client_cls, llm_response)
 
         result = extract_with_llm(
             "Invoice text here...",
@@ -233,8 +250,8 @@ class TestExtractWithLLM:
             "vat_amount": "21.00",
         }
 
-    @patch("backend.services.llm_extraction.requests.post")
-    def test_partial_fields(self, mock_post, llm_settings):
+    @patch("backend.services.llm_extraction.httpx.Client")
+    def test_partial_fields(self, mock_client_cls, llm_settings):
         """LLM returns only some of the requested fields."""
         llm_response = {
             "choices": [
@@ -250,11 +267,7 @@ class TestExtractWithLLM:
                 }
             ]
         }
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: llm_response,
-            raise_for_status=lambda: None,
-        )
+        self._mock_httpx_client(mock_client_cls, llm_response)
 
         result = extract_with_llm(
             "Invoice text...",
@@ -268,8 +281,8 @@ class TestExtractWithLLM:
         assert "base_amount" not in result.fields
         assert "vat_amount" not in result.fields
 
-    @patch("backend.services.llm_extraction.requests.post")
-    def test_invalid_json_response(self, mock_post, llm_settings):
+    @patch("backend.services.llm_extraction.httpx.Client")
+    def test_invalid_json_response(self, mock_client_cls, llm_settings):
         """LLM returns non-JSON content."""
         llm_response = {
             "choices": [
@@ -280,18 +293,14 @@ class TestExtractWithLLM:
                 }
             ]
         }
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: llm_response,
-            raise_for_status=lambda: None,
-        )
+        self._mock_httpx_client(mock_client_cls, llm_response)
 
         result = extract_with_llm("Text...", ["invoice_date"])
         assert result.success is False
         assert "parse" in result.error.lower() or "json" in result.error.lower()
 
-    @patch("backend.services.llm_extraction.requests.post")
-    def test_json_in_markdown(self, mock_post, llm_settings):
+    @patch("backend.services.llm_extraction.httpx.Client")
+    def test_json_in_markdown(self, mock_client_cls, llm_settings):
         """LLM wraps JSON in markdown code block."""
         llm_response = {
             "choices": [
@@ -302,69 +311,91 @@ class TestExtractWithLLM:
                 }
             ]
         }
-        mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: llm_response,
-            raise_for_status=lambda: None,
-        )
+        self._mock_httpx_client(mock_client_cls, llm_response)
 
         result = extract_with_llm("Text...", ["invoice_date"])
         assert result.success is True
         assert result.fields == {"invoice_date": "2024-01-15"}
 
-    @patch("backend.services.llm_extraction.requests.post")
-    def test_timeout(self, mock_post, llm_settings):
+    @patch("backend.services.llm_extraction.httpx.Client")
+    def test_timeout(self, mock_client_cls, llm_settings):
         """LLM request times out."""
-        import requests as req
-        mock_post.side_effect = req.Timeout("Connection timed out")
+        import httpx
+        mock_client = MagicMock()
+        mock_client.post.side_effect = httpx.TimeoutException("timed out")
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
 
         result = extract_with_llm("Text...", ["invoice_date"])
         assert result.success is False
         assert "timeout" in result.error.lower()
 
-    @patch("backend.services.llm_extraction.requests.post")
-    def test_connection_error(self, mock_post, llm_settings):
+    @patch("backend.services.llm_extraction.httpx.Client")
+    def test_connection_error(self, mock_client_cls, llm_settings):
         """LLM connection fails."""
-        import requests as req
-        mock_post.side_effect = req.ConnectionError("Connection refused")
+        import httpx
+        mock_client = MagicMock()
+        mock_client.post.side_effect = httpx.ConnectError("Connection refused")
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
 
         result = extract_with_llm("Text...", ["invoice_date"])
         assert result.success is False
         assert "connection" in result.error.lower()
 
-    @patch("backend.services.llm_extraction.requests.post")
-    def test_http_500_retry_then_fail(self, mock_post, llm_settings):
+    @patch("backend.services.llm_extraction.httpx.Client")
+    def test_http_500_retry_then_fail(self, mock_client_cls, llm_settings):
         """LLM returns 500 on all attempts."""
-        import requests as req
+        import httpx
 
         def raise_500(*args, **kwargs):
-            err = req.HTTPError("500 Server Error")
-            err.response = MagicMock(status_code=500, text="Internal Server Error")
-            raise err
+            mock_resp = MagicMock()
+            mock_resp.status_code = 500
+            mock_resp.text = "Internal Server Error"
+            raise httpx.HTTPStatusError(
+                "500 Server Error",
+                request=MagicMock(),
+                response=mock_resp,
+            )
 
-        mock_post.side_effect = raise_500
+        mock_client = MagicMock()
+        mock_client.post.side_effect = raise_500
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
 
         result = extract_with_llm("Text...", ["invoice_date"])
         assert result.success is False
         assert "500" in result.error
 
-    @patch("backend.services.llm_extraction.requests.post")
-    def test_http_400_no_retry(self, mock_post, llm_settings):
+    @patch("backend.services.llm_extraction.httpx.Client")
+    def test_http_400_no_retry(self, mock_client_cls, llm_settings):
         """LLM returns 400 (non-retryable)."""
-        import requests as req
+        import httpx
 
         def raise_400(*args, **kwargs):
-            err = req.HTTPError("400 Bad Request")
-            err.response = MagicMock(status_code=400, text="Bad Request")
-            raise err
+            mock_resp = MagicMock()
+            mock_resp.status_code = 400
+            mock_resp.text = "Bad Request"
+            raise httpx.HTTPStatusError(
+                "400 Bad Request",
+                request=MagicMock(),
+                response=mock_resp,
+            )
 
-        mock_post.side_effect = raise_400
+        mock_client = MagicMock()
+        mock_client.post.side_effect = raise_400
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
 
         result = extract_with_llm("Text...", ["invoice_date"])
         assert result.success is False
         assert "400" in result.error
         # Should only be called once (no retry for 4xx).
-        assert mock_post.call_count == 1
+        assert mock_client.post.call_count == 1
 
     def test_empty_missing_fields(self, llm_settings):
         """No missing fields: returns success with no fields."""

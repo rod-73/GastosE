@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 
 from backend.config import get_settings
 from backend.services.extraction_schema import VALID_FIELDS
@@ -224,22 +224,18 @@ def extract_with_llm(
     last_error: Optional[str] = None
     for attempt in range(settings.LLM_MAX_RETRIES + 1):
         try:
-            response = requests.post(
-                url,
-                headers=headers,
-                json=payload,
-                timeout=settings.LLM_TIMEOUT_SECONDS,
-            )
+            with httpx.Client(timeout=settings.LLM_TIMEOUT_SECONDS) as client:
+                response = client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             break
-        except requests.Timeout:
+        except httpx.TimeoutException:
             last_error = f"Timeout after {settings.LLM_TIMEOUT_SECONDS}s"
             logger.warning(
                 "LLM request timeout (attempt %d/%d)",
                 attempt + 1,
                 settings.LLM_MAX_RETRIES + 1,
             )
-        except requests.ConnectionError as e:
+        except httpx.ConnectError as e:
             last_error = f"Connection error: {e}"
             logger.warning(
                 "LLM connection error (attempt %d/%d): %s",
@@ -247,7 +243,7 @@ def extract_with_llm(
                 settings.LLM_MAX_RETRIES + 1,
                 e,
             )
-        except requests.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             # 4xx errors are not retryable.
             if 400 <= e.response.status_code < 500:
                 last_error = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
@@ -260,7 +256,7 @@ def extract_with_llm(
                 settings.LLM_MAX_RETRIES + 1,
                 last_error,
             )
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             last_error = f"Request error: {e}"
             logger.warning(
                 "LLM request error (attempt %d/%d): %s",
