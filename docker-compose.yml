@@ -37,6 +37,7 @@ services:
       GASTOSE_SECRET_KEY: ${GASTOSE_SECRET_KEY:-dev-secret-key-change-in-production}
     volumes:
       - document_storage:/data/documents
+      - ./scripts:/app/scripts
     ports:
       - "8000:8000"
     depends_on:
@@ -50,6 +51,26 @@ services:
       start_period: 15s
     networks:
       - gastose-network
+
+  # Init admin user (one-shot container)
+  init-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gastose-init-admin
+    environment:
+      GASTOSE_DATABASE_URL: postgresql+psycopg2://gastose:${POSTGRES_PASSWORD:-gastose_dev_password}@postgres:5432/gastose
+    volumes:
+      - ./scripts:/app/scripts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: ["python", "/app/scripts/init_admin.py"]
+    networks:
+      - gastose-network
+    restart: "no"
 
   # Frontend (static files served by nginx)
   frontend:
