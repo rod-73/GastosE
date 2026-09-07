@@ -374,18 +374,55 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
             m.group(1).strip(), 0.75, method, "regex:vat_amount"
         )
 
-    # Currency: flexible patterns.
-    # "EUR", "USD", "€", "$"
-    m = re.search(r"\b(EUR|USD|GBP|MXN|€|\$)\b", text)
+    # Currency: prefer currency associated with amounts/totals.
+    # Strategy:
+    # 1. Look for currency near "TOTAL", "IMPORTE", "Amount" (high confidence).
+    # 2. Look for currency followed by a number (e.g., "EUR 147,96").
+    # 3. Fallback: first occurrence in text.
+    currency = None
+    confidence = 0.70
+    rule = "regex:currency"
+
+    # 1. Currency near total/amount keywords.
+    m = re.search(
+        r"(?:TOTAL|IMPORTE|Amount|Total|Importe)[^\n]*?\b(EUR|USD|GBP|MXN|€|\$)\b",
+        text, re.IGNORECASE,
+    )
+    if not m:
+        m = re.search(
+            r"\b(EUR|USD|GBP|MXN|€|\$)\b[^\n]*?(?:TOTAL|IMPORTE|Amount|Total|Importe)",
+            text, re.IGNORECASE,
+        )
     if m:
         currency = m.group(1)
+        confidence = 0.90
+        rule = "regex:currency_near_total"
+    else:
+        # 2. Currency followed by a numeric amount.
+        m = re.search(
+            r"\b(EUR|USD|GBP|MXN|€|\$)\b\s*[\d.,]+",
+            text,
+        )
+        if m:
+            currency = m.group(1)
+            confidence = 0.80
+            rule = "regex:currency_before_amount"
+        else:
+            # 3. Fallback: first occurrence.
+            m = re.search(r"\b(EUR|USD|GBP|MXN|€|\$)\b", text)
+            if m:
+                currency = m.group(1)
+                confidence = 0.70
+                rule = "regex:currency_first"
+
+    if currency:
         # Normalize symbols to codes.
         if currency == "€":
             currency = "EUR"
         elif currency == "$":
             currency = "USD"
         fields["currency"] = _make_field(
-            currency, 0.85, method, "regex:currency"
+            currency, confidence, method, rule
         )
 
     if not fields:
