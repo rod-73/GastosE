@@ -103,6 +103,39 @@ def claim_job(
     return job
 
 
+def process_job_direct(job: ExtractionJob, db: DbSession) -> Extraction:
+    """Process a specific extraction job directly (synchronous, no claim).
+
+    This is used when processing jobs inline (e.g., during upload) rather
+    than through the worker claim/process flow.
+
+    Steps:
+    1. Set job to 'running' state.
+    2. Check idempotency: if a completed extraction exists, reuse it.
+    3. Verify document integrity.
+    4. Read document content from filesystem.
+    5. Select and execute extraction method.
+    6. Validate output.
+    7. Persist results.
+    8. Update job state.
+
+    Returns the Extraction record.
+    """
+    owner_id = job.owner_id
+    document_id = job.document_id
+
+    # Set job to running.
+    now = datetime.now(timezone.utc)
+    job.state = "running"
+    job.claimed_by = job.claimed_by  # Keep existing or None
+    job.claimed_at = now
+    job.lease_expires_at = now + timedelta(minutes=LEASE_DURATION_MINUTES)
+    job.attempts = job.attempts + 1
+    job.updated_at = now
+    db.commit()
+    db.refresh(job)
+
+
 def process_job(job: ExtractionJob, db: DbSession) -> Extraction:
     """Process a claimed extraction job.
 

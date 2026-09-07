@@ -203,22 +203,14 @@ def upload_document(
 
     # 11. Process extraction synchronously.
     try:
-        # Claim the job (sets state to 'running').
-        claimed_job = extraction_service.claim_job(session.user_id, owner_id, db)
-        if claimed_job and claimed_job.id == job.id:
-            # Process the job (extract, validate, persist).
-            extraction_service.process_job(claimed_job, db)
-            logger.info(
-                "Extraction completed for document %s (job %s)",
-                document.id,
-                job.id,
-            )
-        else:
-            logger.warning(
-                "Claimed job %s does not match uploaded job %s",
-                claimed_job.id if claimed_job else None,
-                job.id,
-            )
+        # Process the job directly (sets state to 'running', then processes).
+        extraction_service.process_job_direct(job, db)
+        extraction_service.process_job(job, db)
+        logger.info(
+            "Extraction completed for document %s (job %s)",
+            document.id,
+            job.id,
+        )
     except Exception as e:
         logger.error("Extraction failed for document %s: %s", document.id, e)
         # Update job state to failed.
