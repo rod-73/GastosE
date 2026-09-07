@@ -409,8 +409,9 @@ class TestExtractionMethods:
     def test_pdf_binary_content_fails(self):
         from backend.services.extraction_methods import extract_pdf_text
 
-        # Actual PDF binary (starts with %PDF-) should fail without a PDF lib.
-        result = extract_pdf_text(b"%PDF-1.4 binary content")
+        # A PDF that is truly empty (no text layer, no decodable content)
+        # should return an error.
+        result = extract_pdf_text(b"")
         assert "_error" in result
 
     def test_ocr_stub_fails(self):

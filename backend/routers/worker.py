@@ -42,7 +42,7 @@ class WorkerProcessResponse(BaseModel):
     """Response for processing a job."""
 
     job_id: UUID
-    extraction_id: UUID
+    extraction_id: Optional[UUID] = None
     state: str
     method: str
     fields_extracted: int
@@ -131,18 +131,19 @@ def process_job(
 
     extraction = extraction_service.process_job(job, db)
 
-    # Count fields.
-    fields_count = (
-        db.execute(
-            select(Extraction.id).where(
-                Extraction.id == extraction.id,
-            )
+    # If extraction is None, the job failed (no Extraction record created).
+    if extraction is None:
+        return WorkerProcessResponse(
+            job_id=job.id,
+            extraction_id=job.extraction_id,
+            state="failed",
+            method=job.format_detected,
+            fields_extracted=0,
+            failure_code=job.failure_code,
+            failure_reason=job.failure_reason,
         )
-        .scalars()
-        .first()
-        is not None
-    )
-    # Get actual field count.
+
+    # Count fields.
     from backend.models.extraction import ExtractedValue
     field_count = (
         db.execute(

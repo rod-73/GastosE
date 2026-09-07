@@ -209,13 +209,21 @@ def upload_document(
         # Process the job directly (sets state to 'running', then processes).
         extraction_service.process_job_direct(job, db, actor_id=session.user_id)
         extraction = extraction_service.process_job(job, db)
-        extraction_id = extraction.id
-        logger.info(
-            "Extraction completed for document %s (job %s, extraction %s)",
-            document.id,
-            job.id,
-            extraction_id,
-        )
+        if extraction is not None:
+            extraction_id = extraction.id
+            logger.info(
+                "Extraction completed for document %s (job %s, extraction %s)",
+                document.id,
+                job.id,
+                extraction_id,
+            )
+        else:
+            logger.warning(
+                "Extraction failed for document %s (job %s): %s",
+                document.id,
+                job.id,
+                job.failure_reason,
+            )
     except Exception as e:
         logger.error("Extraction failed for document %s: %s", document.id, e)
         # Rollback the failed transaction and mark job as failed.
