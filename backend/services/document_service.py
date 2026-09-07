@@ -403,15 +403,11 @@ def delete_document(
         from backend.exceptions import NotFoundException
         raise NotFoundException("Document")
 
-    # 1. Delete audit events for this document.
-    db.execute(
-        delete(AuditEvent).where(
-            AuditEvent.entity_id == document_id,
-            AuditEvent.owner_id == owner_id,
-        )
-    )
+    # NOTE: audit_events is append-only (PostgreSQL trigger prevents DELETE).
+    # We do NOT delete audit events. The deletion is recorded via a new
+    # audit event at the end of this function.
 
-    # 2. Delete duplications involving this document.
+    # 1. Delete duplications involving this document.
     db.execute(
         delete(Duplication).where(
             (Duplication.document_a_id == document_id) |
@@ -420,7 +416,7 @@ def delete_document(
         )
     )
 
-    # 3. Delete extraction chain: validated -> normalized -> extracted -> extractions.
+    # 2. Delete extraction chain: validated -> normalized -> extracted -> extractions.
     # Get extraction IDs for this document.
     extraction_ids = (
         db.execute(
@@ -479,7 +475,7 @@ def delete_document(
         )
     )
 
-    # 4. Delete expenses (and their lines) for this document.
+    # 3. Delete expenses and all dependent records for this document.
     expense_ids = (
         db.execute(
             select(Expense.id).where(
@@ -491,24 +487,52 @@ def delete_document(
         .all()
     )
     if expense_ids:
+        # 3a. tax_lines (references expense_lines and expenses).
+        from backend.models.expense import TaxLine
         db.execute(
-            delete(ExpenseLine).where(
-                ExpenseLine.expense_id.in_(expense_ids),
+            delete(TaxLine).where(
+                (TaxLine.expense_id.in_(expense_ids)) |
+                (TaxLine.expense_line_id.in_(
+                    select(ExpenseLine.id).where(
+                        ExpenseLine.expense_id.in_(expense_ids),
+                    )
+                )),
             )
         )
-        # Delete split_expenses links.
+        # 3b. manual_corrections (references expenses).
+        from backend.models.manual_correction import ManualCorrection
+        db.execute(
+            delete(ManualCorrection).where(
+                ManualCorrection.expense_id.in_(expense_ids),
+            )
+        )
+        # 3c. payments (references expenses).
+        from backend.models.payment import Payment
+        db.execute(
+            delete(Payment).where(
+                Payment.expense_id.in_(expense_ids),
+            )
+        )
+        # 3d. split_expenses (references expenses).
         db.execute(
             delete(SplitExpense).where(
                 SplitExpense.expense_id.in_(expense_ids),
             )
         )
+        # 3e. expense_lines.
+        db.execute(
+            delete(ExpenseLine).where(
+                ExpenseLine.expense_id.in_(expense_ids),
+            )
+        )
+        # 3f. expenses.
         db.execute(
             delete(Expense).where(
                 Expense.id.in_(expense_ids),
             )
         )
 
-    # 5. Delete document_splits for this document.
+    # 4. Delete document_splits for this document.
     split_ids = (
         db.execute(
             select(DocumentSplit.id).where(
@@ -531,7 +555,7 @@ def delete_document(
             )
         )
 
-    # 6. Delete extraction jobs.
+    # 5. Delete extraction jobs.
     db.execute(
         delete(ExtractionJob).where(
             ExtractionJob.document_id == document_id,
@@ -539,10 +563,10 @@ def delete_document(
         )
     )
 
-    # 7. Delete the source document.
+    # 6. Delete the source document.
     db.delete(document)
 
-    # 8. Delete the file from storage.
+    # 7. Delete the file from storage.
     settings = get_settings()
     path = os.path.join(
         settings.DOCUMENT_STORAGE_PATH,
