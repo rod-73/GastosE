@@ -29,6 +29,7 @@ from backend.models.idempotency_key import IdempotencyKey
 from backend.models.session import Session
 from backend.models.document import SourceDocument
 from backend.schemas.document import (
+    DocumentDeleteResponse,
     DocumentResponse,
     DocumentUploadResponse,
     FingerprintVerifyResponse,
@@ -307,3 +308,32 @@ def get_document_content(
             "ETag": f'"{document.fingerprint_sha256}"',
         },
     )
+
+
+@router.delete(
+    "/{document_id}",
+    response_model=DocumentDeleteResponse,
+    dependencies=[Depends(require_role("reader"))],
+)
+def delete_document(
+    document_id: uuid.UUID,
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> DocumentDeleteResponse:
+    """Delete a document and all associated data (V1-S3).
+
+    Cascades to: extractions, extracted_values, normalized_values,
+    validated_values, expenses, expense_lines, extraction_jobs,
+    document_splits, duplications, and audit events.
+
+    Also removes the file from storage.
+
+    Returns 200 on success, 404 if the document does not exist.
+    """
+    document_service.delete_document(
+        document_id=document_id,
+        owner_id=session.organization_id,
+        actor_id=session.user_id,
+        db=db,
+    )
+    return DocumentDeleteResponse(id=document_id)

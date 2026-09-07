@@ -331,3 +331,115 @@ def test_get_content_isolation_returns_404(client: TestClient, auth_headers, db_
 
     response = client.get(f"/api/v1/documents/{doc_id}/content", headers=headers_b)
     assert response.status_code == 404
+
+
+# === Tests: DELETE /api/v1/documents/{id} ===
+
+
+def test_delete_document_returns_200(client: TestClient, auth_headers, db_session):
+    """Deleting an existing document returns 200 and removes it."""
+    response = _upload(client, PDF_CONTENT, "test.pdf", auth_headers)
+    assert response.status_code == 202
+    doc_id = response.json()["id"]
+
+    delete_resp = client.delete(f"/api/v1/documents/{doc_id}", headers=auth_headers)
+    assert delete_resp.status_code == 200
+    body = delete_resp.json()
+    assert body["deleted"] is True
+    assert body["id"] == doc_id
+
+    # Document should be gone.
+    get_resp = client.get(f"/api/v1/documents/{doc_id}", headers=auth_headers)
+    assert get_resp.status_code == 404
+
+
+def test_delete_document_not_found_returns_404(client: TestClient, auth_headers):
+    """Deleting a non-existent document returns 404."""
+    fake_id = str(uuid.uuid4())
+    response = client.delete(f"/api/v1/documents/{fake_id}", headers=auth_headers)
+    assert response.status_code == 404
+
+
+def test_delete_document_isolation_returns_404(client: TestClient, auth_headers, db_session):
+    """User from org B cannot delete org A's document."""
+    upload_response = _upload(client, PDF_CONTENT, "test.pdf", auth_headers)
+    assert upload_response.status_code == 202
+    doc_id = upload_response.json()["id"]
+
+    import bcrypt
+    from backend.models import Organization, User
+    import uuid as uuid_mod
+
+    org_b = Organization(id=uuid_mod.uuid4(), name="Org B Del", state="active")
+    user_b = User(
+        id=uuid_mod.uuid4(),
+        organization_id=org_b.id,
+        username="userb_del",
+        email="b_del@example.com",
+        password_hash=bcrypt.hashpw(b"pass123", bcrypt.gensalt()).decode("utf-8"),
+        role="reader",
+        state="active",
+    )
+    db_session.add(org_b)
+    db_session.add(user_b)
+    db_session.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "userb_del", "password": "pass123"},
+    )
+    assert login_response.status_code == 200
+    token_b = login_response.json()["token"]
+    headers_b = {"Authorization": f"Bearer {token_b}"}
+
+    response = client.delete(f"/api/v1/documents/{doc_id}", headers=headers_b)
+    assert response.status_code == 404
+
+    # Original document still exists.
+    get_resp = client.get(f"/api/v1/documents/{doc_id}", headers=auth_headers)
+    assert get_resp.status_code == 200
+
+
+def test_delete_document_cascades_jobs(client: TestClient, auth_headers, db_session):
+    """Deleting a document also removes its extraction jobs."""
+    response = _upload(client, PDF_CONTENT, "test.pdf", auth_headers)
+    assert response.status_code == 202
+    doc_id = response.json()["id"]
+
+    # Verify job exists.
+    from backend.models import ExtractionJob
+    job = db_session.query(ExtractionJob).filter_by(document_id=uuid.UUID(doc_id)).first()
+    assert job is not None
+
+    # Delete the document.
+    delete_resp = client.delete(f"/api/v1/documents/{doc_id}", headers=auth_headers)
+    assert delete_resp.status_code == 200
+
+    # Job should be gone.
+    job = db_session.query(ExtractionJob).filter_by(document_id=uuid.UUID(doc_id)).first()
+    assert job is None
+
+
+def test_delete_document_removes_file_from_storage(client: TestClient, auth_headers, db_session):
+    """Deleting a document removes the file from storage."""
+    import os
+    from backend.config import get_settings
+
+    response = _upload(client, PDF_CONTENT, "test.pdf", auth_headers)
+    assert response.status_code == 202
+    doc_id = response.json()["id"]
+    fingerprint = response.json()["fingerprint_sha256"]
+
+    # Verify file exists.
+    settings = get_settings()
+    from backend.models import Organization
+    org = db_session.query(Organization).first()
+    path = os.path.join(settings.DOCUMENT_STORAGE_PATH, str(org.id), fingerprint)
+    assert os.path.isfile(path)
+
+    # Delete.
+    delete_resp = client.delete(f"/api/v1/documents/{doc_id}", headers=auth_headers)
+    assert delete_resp.status_code == 200
+
+    # File should be gone.
+    assert not os.path.isfile(path)

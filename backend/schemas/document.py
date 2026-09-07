@@ -46,3 +46,11 @@ class FingerprintVerifyResponse(BaseModel):
 
     fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
     matches: bool
+
+
+class DocumentDeleteResponse(BaseModel):
+    """Response for ``DELETE /api/v1/documents/{id}`` (200 OK)."""
+
+    id: UUID
+    deleted: bool = True
+    message: str = "Document and associated data deleted"

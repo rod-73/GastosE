@@ -354,3 +354,221 @@ def verify_fingerprint(
         for chunk in iter(lambda: fh.read(65536), b""):
             sha.update(chunk)
     return sha.hexdigest() == document.fingerprint_sha256
+
+
+def delete_document(
+    document_id: uuid.UUID,
+    owner_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    db: DbSession,
+) -> None:
+    """Delete a document and all associated data (cascade).
+
+    Deletes in FK dependency order:
+    1. audit_events (entity_id = document_id)
+    2. duplications (document_a_id or document_b_id)
+    3. validated_values -> normalized_values -> extracted_values -> extractions
+    4. expense_lines -> expenses
+    5. split_expenses -> document_splits
+    6. extraction_jobs
+    7. source_documents
+    8. File on storage
+
+    Raises NotFoundException if the document does not exist or belongs
+    to a different organization.
+    """
+    from backend.models.audit_event import AuditEvent
+    from backend.models.duplication import Duplication
+    from backend.models.extraction import Extraction, ExtractedValue
+    from backend.models.extraction_job import ExtractionJob
+    from backend.models.expense import Expense, ExpenseLine
+    from backend.models.normalized_value import NormalizedValue
+    from backend.models.validated_value import ValidatedValue
+    from backend.models.document_split import DocumentSplit, SplitExpense
+    from backend.utils import uuid7
+    from datetime import datetime, timezone
+
+    # Verify document exists and belongs to the caller's org.
+    document = (
+        db.execute(
+            select(SourceDocument).where(
+                SourceDocument.id == document_id,
+                SourceDocument.owner_id == owner_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if document is None:
+        from backend.exceptions import NotFoundException
+        raise NotFoundException("Document")
+
+    # 1. Delete audit events for this document.
+    db.execute(
+        AuditEvent.__table__.delete().where(
+            AuditEvent.entity_id == document_id,
+            AuditEvent.owner_id == owner_id,
+        )
+    )
+
+    # 2. Delete duplications involving this document.
+    db.execute(
+        Duplication.__table__.delete().where(
+            (Duplication.document_a_id == document_id) |
+            (Duplication.document_b_id == document_id),
+            Duplication.owner_id == owner_id,
+        )
+    )
+
+    # 3. Delete extraction chain: validated -> normalized -> extracted -> extractions.
+    # Get extraction IDs for this document.
+    extraction_ids = (
+        db.execute(
+            select(Extraction.id).where(
+                Extraction.document_id == document_id,
+                Extraction.owner_id == owner_id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    if extraction_ids:
+        # Delete validated_values (via normalized_values -> extracted_values).
+        # First get normalized_value IDs linked to extracted_values of these extractions.
+        extracted_value_ids = (
+            db.execute(
+                select(ExtractedValue.id).where(
+                    ExtractedValue.extraction_id.in_(extraction_ids),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if extracted_value_ids:
+            normalized_value_ids = (
+                db.execute(
+                    select(NormalizedValue.id).where(
+                        NormalizedValue.extracted_value_id.in_(extracted_value_ids),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if normalized_value_ids:
+                db.execute(
+                    ValidatedValue.__table__.delete().where(
+                        ValidatedValue.normalized_value_id.in_(normalized_value_ids),
+                    )
+                )
+            db.execute(
+                NormalizedValue.__table__.delete().where(
+                    NormalizedValue.extracted_value_id.in_(extracted_value_ids),
+                )
+            )
+        db.execute(
+            ExtractedValue.__table__.delete().where(
+                ExtractedValue.extraction_id.in_(extraction_ids),
+            )
+        )
+
+    db.execute(
+        Extraction.__table__.delete().where(
+            Extraction.document_id == document_id,
+            Extraction.owner_id == owner_id,
+        )
+    )
+
+    # 4. Delete expenses (and their lines) for this document.
+    expense_ids = (
+        db.execute(
+            select(Expense.id).where(
+                Expense.document_id == document_id,
+                Expense.owner_id == owner_id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if expense_ids:
+        db.execute(
+            ExpenseLine.__table__.delete().where(
+                ExpenseLine.expense_id.in_(expense_ids),
+            )
+        )
+        # Delete split_expenses links.
+        db.execute(
+            SplitExpense.__table__.delete().where(
+                SplitExpense.expense_id.in_(expense_ids),
+            )
+        )
+        db.execute(
+            Expense.__table__.delete().where(
+                Expense.id.in_(expense_ids),
+            )
+        )
+
+    # 5. Delete document_splits for this document.
+    split_ids = (
+        db.execute(
+            select(DocumentSplit.id).where(
+                DocumentSplit.document_id == document_id,
+                DocumentSplit.owner_id == owner_id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if split_ids:
+        db.execute(
+            SplitExpense.__table__.delete().where(
+                SplitExpense.split_id.in_(split_ids),
+            )
+        )
+        db.execute(
+            DocumentSplit.__table__.delete().where(
+                DocumentSplit.id.in_(split_ids),
+            )
+        )
+
+    # 6. Delete extraction jobs.
+    db.execute(
+        ExtractionJob.__table__.delete().where(
+            ExtractionJob.document_id == document_id,
+            ExtractionJob.owner_id == owner_id,
+        )
+    )
+
+    # 7. Delete the source document.
+    db.delete(document)
+
+    # 8. Delete the file from storage.
+    settings = get_settings()
+    path = os.path.join(
+        settings.DOCUMENT_STORAGE_PATH,
+        str(owner_id),
+        document.fingerprint_sha256,
+    )
+    if os.path.isfile(path):
+        os.remove(path)
+
+    # Audit event for the deletion.
+    audit = AuditEvent(
+        id=uuid7(),
+        owner_id=owner_id,
+        entity_type="source_document",
+        entity_id=document_id,
+        action="document.deleted",
+        actor=actor_id,
+        after_data={
+            "safe_name": document.safe_name,
+            "fingerprint_sha256": document.fingerprint_sha256,
+        },
+    )
+    db.add(audit)
+
+    db.commit()
+    logger.info(
+        "Document %s deleted (owner=%s, actor=%s)",
+        document_id, owner_id, actor_id,
+    )
