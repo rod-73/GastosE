@@ -58,19 +58,34 @@ class GastosEAPI {
 
     // Auth
     async login(username, password) {
-        const response = await fetch(`${API_BASE}/auth/login`, {
+        console.log('[GastosE] Login attempt:', username, 'API_BASE:', API_BASE);
+        const url = `${API_BASE}/auth/login`;
+        console.log('[GastosE] Fetching URL:', url);
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
         });
 
+        console.log('[GastosE] Login response status:', response.status);
+        console.log('[GastosE] Login response headers:', Object.fromEntries(response.headers.entries()));
+        const text = await response.text();
+        console.log('[GastosE] Login response body:', text);
+
         if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            throw new Error(error.detail || `Login failed: ${response.status}`);
+            let detail = `Login failed: ${response.status}`;
+            try {
+                const error = JSON.parse(text);
+                detail = error.detail || detail;
+            } catch (e) {
+                // not JSON
+            }
+            throw new Error(detail);
         }
 
-        const data = await response.json();
+        const data = JSON.parse(text);
         this.token = data.token;
+        console.log('[GastosE] Login OK, token:', data.token.substring(0, 10) + '...');
         return data;
     }
 
