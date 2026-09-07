@@ -32,6 +32,7 @@ services:
     container_name: gastose-backend
     environment:
       DATABASE_URL: postgresql+psycopg2://gastose:${POSTGRES_PASSWORD:-gastose_dev_password}@postgres:5432/gastose
+      GASTOSE_DATABASE_URL: postgresql+psycopg2://gastose:${POSTGRES_PASSWORD:-gastose_dev_password}@postgres:5432/gastose
       GASTOSE_DOCUMENT_STORAGE_PATH: /data/documents
       GASTOSE_SECRET_KEY: ${GASTOSE_SECRET_KEY:-dev-secret-key-change-in-production}
     volumes:
