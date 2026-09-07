@@ -204,14 +204,17 @@ def upload_document(
     # 11. Process extraction synchronously.
     # Extraction failures are non-fatal: the document remains uploaded
     # and the job is marked as failed. The user can retry later.
+    extraction_id = None
     try:
         # Process the job directly (sets state to 'running', then processes).
         extraction_service.process_job_direct(job, db, actor_id=session.user_id)
-        extraction_service.process_job(job, db)
+        extraction = extraction_service.process_job(job, db)
+        extraction_id = extraction.id
         logger.info(
-            "Extraction completed for document %s (job %s)",
+            "Extraction completed for document %s (job %s, extraction %s)",
             document.id,
             job.id,
+            extraction_id,
         )
     except Exception as e:
         logger.error("Extraction failed for document %s: %s", document.id, e)
@@ -230,6 +233,64 @@ def upload_document(
             job.failure_code = "extraction_error"
             job.failure_reason = str(e)[:2000]  # Truncate long errors
             db.commit()
+
+    # 12. If extraction succeeded, run validation and create expense.
+    if extraction_id:
+        try:
+            from backend.services import validation_service
+            from backend.services import expense_service
+            from backend.models.extraction import Extraction
+
+            # Get the extraction.
+            extraction = (
+                db.execute(
+                    select(Extraction).where(Extraction.id == extraction_id)
+                )
+                .scalars()
+                .first()
+            )
+            if extraction:
+                # Run validation.
+                passed, failed, warnings = validation_service.validate_extraction(
+                    extraction_id=extraction_id,
+                    owner_id=owner_id,
+                    db=db,
+                )
+                logger.info(
+                    "Validation completed: %d passed, %d failed, %d warnings",
+                    passed,
+                    failed,
+                    warnings,
+                )
+
+                # If validation passed (no blocking errors), create expense.
+                if failed == 0:
+                    expense = expense_service.create_expense_from_validation(
+                        extraction_id=extraction_id,
+                        owner_id=owner_id,
+                        db=db,
+                    )
+                    logger.info(
+                        "Expense created: %s (total: %s)",
+                        expense.id,
+                        expense.total,
+                    )
+                    # Update document state to 'accepted'.
+                    document.state = "accepted"
+                    db.commit()
+                else:
+                    logger.warning(
+                        "Validation has %d blocking errors; expense not created",
+                        failed,
+                    )
+        except Exception as e:
+            logger.error(
+                "Validation/expense creation failed for document %s: %s",
+                document.id,
+                e,
+            )
+            # Non-fatal: document remains in 'extracted' state.
+            db.rollback()
 
     db.refresh(document)
     return document
