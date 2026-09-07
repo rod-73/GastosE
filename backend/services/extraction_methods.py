@@ -272,9 +272,11 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
         if lines:
             # Heuristic: if first line looks like a company name (has spaces, no digits).
             first_line = lines[0]
-            if len(first_line) > 3 and not re.search(r"\d{4}", first_line):
+            # Remove address parts after "·" or "," if present.
+            supplier_candidate = re.split(r"[·,]", first_line)[0].strip()
+            if len(supplier_candidate) > 3 and not re.search(r"\d{4}", supplier_candidate):
                 fields["supplier_name"] = _make_field(
-                    first_line, 0.50, method, "heuristic:first_line"
+                    supplier_candidate, 0.60, method, "heuristic:first_line"
                 )
 
     # NIF/CIF: Spanish tax ID pattern (flexible).
@@ -327,7 +329,7 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
     # Base amount: flexible patterns.
     # "Total (base imponible) 20,71 EUR", "Base: 20.71", "Net Amount: 20,71"
     m = re.search(
-        r"(?:Base\s*(?:imponible)?|Net\s*Amount|Subtotal|Base)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
+        r"(?:Total\s*\(base\s*imponible\)|Base\s*(?:imponible)?|Net\s*Amount|Subtotal)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
         text,
         re.IGNORECASE,
     )
@@ -337,9 +339,9 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
         )
 
     # VAT rate: flexible patterns.
-    # "IVA (21,0 %)", "VAT: 21%", "Tax Rate: 21.0%"
+    # "IVA (21,0 %)", "VAT: 21%", "Tax Rate: 21.0%", "21,0 %"
     m = re.search(
-        r"(?:IVA|VAT|Tax\s*Rate|Tipo\s*IVA)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%",
+        r"(?:IVA|VAT|Tax\s*Rate|Tipo\s*IVA)\s*\(?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%\s*\)?",
         text,
         re.IGNORECASE,
     )
@@ -347,11 +349,22 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
         fields["vat_rate"] = _make_field(
             m.group(1).strip(), 0.75, method, "regex:vat_rate"
         )
+    else:
+        # Fallback: look for percentage near "IVA" or "VAT".
+        m = re.search(
+            r"(?:IVA|VAT)[^\d]*(\d{1,2}(?:[.,]\d{1,2})?)\s*%",
+            text,
+            re.IGNORECASE,
+        )
+        if m:
+            fields["vat_rate"] = _make_field(
+                m.group(1).strip(), 0.70, method, "regex:vat_rate_fallback"
+            )
 
     # VAT amount: flexible patterns.
     # "+ IVA (21,0 %) 4,35 EUR", "VAT: 4.35", "Tax Amount: 4,35"
     m = re.search(
-        r"(?:\+\s*)?(?:IVA|VAT|Tax\s*Amount|Importe\s*IVA)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
+        r"(?:\+\s*)?(?:IVA|VAT|Tax\s*Amount|Importe\s*IVA)\s*\(?\s*(?:\d{1,2}(?:[.,]\d{1,2})?\s*%\s*\)?)?\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
         text,
         re.IGNORECASE,
     )
