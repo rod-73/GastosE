@@ -83,9 +83,9 @@ def main() -> int:
             password_hash = hash_password("admin123")
             conn.execute(
                 text(
-                    "INSERT INTO users (id, username, password_hash, organization_id, "
+                    "INSERT INTO users (id, username, email, password_hash, organization_id, "
                     "role, state, created_at, updated_at) "
-                    "VALUES (:id, 'admin', :hash, :org_id, 'admin', 'active', NOW(), NOW())"
+                    "VALUES (:id, 'admin', 'admin@example.com', :hash, :org_id, 'admin', 'active', NOW(), NOW())"
                 ),
                 {"id": user_id, "hash": password_hash, "org_id": org_id},
             )
