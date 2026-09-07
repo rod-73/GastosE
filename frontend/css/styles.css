@@ -242,3 +242,33 @@ ul li:last-child {
     opacity: 1;
     background-color: #c0392b;
 }
+
+/* Expense list items */
+.expense-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+}
+
+.expense-amounts {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Expense totals row */
+.expense-totals {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-top: 2px solid #2c3e50;
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.expense-totals .expense-amounts {
+    font-weight: 600;
+}

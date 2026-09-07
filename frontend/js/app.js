@@ -156,12 +156,30 @@ async function loadExpenses() {
         const expenses = data.expenses || data;
         const ul = document.getElementById('expenses-ul');
         ul.innerHTML = expenses.map(exp => `
-            <li>
+            <li class="expense-item">
                 <strong>${exp.document_number || 'Gasto'}</strong>
                 <span class="badge badge-${exp.state}">${exp.state}</span>
-                <small>${exp.currency} ${exp.total}</small>
+                <small class="expense-amounts">
+                    Base: ${exp.currency} ${exp.base_total} · IVA: ${exp.currency} ${exp.vat_total} · Total: ${exp.currency} ${exp.total}
+                </small>
             </li>
         `).join('') || '<li><em>Sin gastos</em></li>';
+
+        // Totals row
+        if (expenses.length > 0) {
+            const totalBase = expenses.reduce((sum, e) => sum + parseFloat(e.base_total || 0), 0);
+            const totalVat = expenses.reduce((sum, e) => sum + parseFloat(e.vat_total || 0), 0);
+            const totalAll = expenses.reduce((sum, e) => sum + parseFloat(e.total || 0), 0);
+            const currency = expenses[0].currency || 'EUR';
+            ul.innerHTML += `
+                <li class="expense-totals">
+                    <strong>TOTAL</strong>
+                    <small class="expense-amounts">
+                        Base: ${currency} ${totalBase.toFixed(2)} · IVA: ${currency} ${totalVat.toFixed(2)} · Total: ${currency} ${totalAll.toFixed(2)}
+                    </small>
+                </li>
+            `;
+        }
     } catch (error) {
         if (error.message.includes('login again')) {
             showLogin();
