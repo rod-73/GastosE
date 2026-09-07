@@ -123,6 +123,10 @@ class GastosEAPI {
         return this.request('GET', `/documents/${id}`);
     }
 
+    async deleteDocument(id) {
+        return this.request('DELETE', `/documents/${id}`);
+    }
+
     // Expenses
     async listExpenses() {
         return this.request('GET', '/expenses');

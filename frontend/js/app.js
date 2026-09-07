@@ -111,12 +111,34 @@ async function loadDocuments() {
         const docs = data.documents || data;
         const ul = document.getElementById('documents-ul');
         ul.innerHTML = docs.map(doc => `
-            <li>
-                <strong>${doc.safe_name || doc.original_filename || 'Documento'}</strong>
-                <span class="badge badge-${doc.state}">${doc.state}</span>
-                <small>${doc.format_detected} - ${new Date(doc.uploaded_at).toLocaleDateString()}</small>
+            <li class="doc-item">
+                <div class="doc-info">
+                    <strong>${doc.original_filename || doc.safe_name || 'Documento'}</strong>
+                    <span class="badge badge-${doc.state}">${doc.state}</span>
+                    <small>${doc.format_detected} - ${new Date(doc.uploaded_at).toLocaleDateString()}</small>
+                </div>
+                <button class="btn-delete" data-doc-id="${doc.id}" title="Eliminar documento">✕</button>
             </li>
         `).join('') || '<li><em>Sin documentos</em></li>';
+
+        // Attach delete handlers
+        ul.querySelectorAll('.btn-delete').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const docId = btn.dataset.docId;
+                const docName = btn.closest('.doc-item').querySelector('strong').textContent;
+                if (!confirm(`¿Eliminar "${docName}" y todos sus datos asociados?\n\nEsta acción no se puede deshacer.`)) {
+                    return;
+                }
+                try {
+                    await api.deleteDocument(docId);
+                    loadDocuments();
+                    loadExpenses();
+                } catch (error) {
+                    alert(`Error al eliminar: ${error.message}`);
+                }
+            });
+        });
     } catch (error) {
         if (error.message.includes('login again')) {
             showLogin();
