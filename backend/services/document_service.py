@@ -4,10 +4,14 @@ Implements the upload pipeline: size validation, magic-byte format
 detection, SHA-256 fingerprint, safe-name generation, duplicate
 detection, filesystem storage, and DB records (SourceDocument +
 ExtractionJob + AuditEvent).
+
+After upload, the extraction job is processed synchronously in the
+same request (no separate worker process).
 """
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import uuid
 from typing import Optional, Tuple
@@ -25,7 +29,10 @@ from backend.models.audit_event import AuditEvent
 from backend.models.document import SourceDocument
 from backend.models.extraction_job import ExtractionJob
 from backend.models.session import Session
+from backend.services import extraction_service
 from backend.utils import uuid7
+
+logger = logging.getLogger(__name__)
 
 # Magic-byte signatures (checked in order; first match wins).
 _MAGIC_SIGNATURES: list[Tuple[bytes, str, str]] = [
@@ -192,6 +199,34 @@ def upload_document(
     db.add(audit)
 
     db.commit()
+    db.refresh(document)
+
+    # 11. Process extraction synchronously.
+    try:
+        # Claim the job (sets state to 'running').
+        claimed_job = extraction_service.claim_job(session.user_id, owner_id, db)
+        if claimed_job and claimed_job.id == job.id:
+            # Process the job (extract, validate, persist).
+            extraction_service.process_job(claimed_job, db)
+            logger.info(
+                "Extraction completed for document %s (job %s)",
+                document.id,
+                job.id,
+            )
+        else:
+            logger.warning(
+                "Claimed job %s does not match uploaded job %s",
+                claimed_job.id if claimed_job else None,
+                job.id,
+            )
+    except Exception as e:
+        logger.error("Extraction failed for document %s: %s", document.id, e)
+        # Update job state to failed.
+        job.state = "failed"
+        job.failure_code = "extraction_error"
+        job.failure_reason = str(e)
+        db.commit()
+
     db.refresh(document)
     return document
 
