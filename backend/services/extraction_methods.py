@@ -208,6 +208,26 @@ def _extract_generic_xml(root: ET.Element) -> Dict[str, Any]:
     return fields
 
 
+def _extract_pdf_text_with_pypdf(content: bytes) -> str:
+    """Extract text from PDF using pypdf library.
+    
+    Returns empty string if extraction fails.
+    """
+    try:
+        from pypdf import PdfReader
+        from io import BytesIO
+        
+        reader = PdfReader(BytesIO(content))
+        text_parts = []
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text_parts.append(page_text)
+        return "\n".join(text_parts)
+    except Exception:
+        return ""
+
+
 def extract_pdf_text(content: bytes) -> Dict[str, Any]:
     """Extract fields from a PDF with text layer using regex rules.
 
@@ -215,33 +235,30 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
     Confidence is medium (0.6-0.85) because text extraction may be
     imperfect and patterns may match incorrectly.
 
-    Note: This is a simplified implementation. In production, a proper
-    PDF text extraction library (pdfminer, pypdf) would be used. Here we
-    treat the content as raw text for the text layer.
+    Uses pypdf to extract the text layer from the PDF.
     """
     method = "pdf_text_rules"
 
-    # For the simplified implementation, decode the content as text.
-    # In production, this would use a PDF library to extract the text layer.
-    try:
-        text = content.decode("utf-8", errors="ignore")
-    except Exception:
-        text = ""
+    # Extract text from PDF using pypdf.
+    text = _extract_pdf_text_with_pypdf(content)
+    
+    if not text:
+        # Fallback: try to decode as UTF-8 (for non-PDF or corrupted files).
+        try:
+            text = content.decode("utf-8", errors="ignore")
+        except Exception:
+            text = ""
 
-    # If the content starts with %PDF-, we can't extract text without a
-    # proper PDF library. Return an error for now.
-    if content.startswith(b"%PDF-"):
-        return _error_output(
-            "PDF text extraction requires a PDF library (pdfminer/pypdf). "
-            "Not available in current runtime."
-        )
+    if not text:
+        return _error_output("No text could be extracted from PDF")
 
     fields: Dict[str, Any] = {}
 
     # Supplier name: look for common patterns.
-    # Pattern: "Supplier: <name>" or "Proveedor: <name>" or "Facturado a: <name>"
+    # Patterns: "Supplier: <name>", "Proveedor: <name>", "Facturado a: <name>",
+    # or the first line of the document (often the supplier name).
     m = re.search(
-        r"(?:Supplier|Proveedor|Facturado\s+a|De)\s*:\s*(.+?)(?:\n|$)",
+        r"(?:Supplier|Proveedor|Facturado\s+a|De|Emitida\s+por)\s*:\s*(.+?)(?:\n|$)",
         text,
         re.IGNORECASE,
     )
@@ -249,10 +266,20 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
         fields["supplier_name"] = _make_field(
             m.group(1).strip(), 0.70, method, "regex:supplier"
         )
+    else:
+        # Fallback: first non-empty line (often supplier name).
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        if lines:
+            # Heuristic: if first line looks like a company name (has spaces, no digits).
+            first_line = lines[0]
+            if len(first_line) > 3 and not re.search(r"\d{4}", first_line):
+                fields["supplier_name"] = _make_field(
+                    first_line, 0.50, method, "heuristic:first_line"
+                )
 
-    # NIF/CIF: Spanish tax ID pattern.
+    # NIF/CIF: Spanish tax ID pattern (flexible).
     m = re.search(
-        r"(?:NIF|CIF|NIF/CIF)\s*:\s*([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z])",
+        r"(?:NIF|CIF|NIF/CIF|N\.?I\.?F\.?|C\.?I\.?F\.?)\s*[:\-]?\s*([A-Z]\d{7}[A-Z0-9]|\d{8}[A-Z]|[A-Z]{2}\d{6}[A-Z0-9])",
         text,
         re.IGNORECASE,
     )
@@ -261,9 +288,10 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
             m.group(1).strip(), 0.85, method, "regex:nif"
         )
 
-    # Invoice number.
+    # Invoice number: flexible patterns.
+    # "N.° de factura: 202787099888", "Invoice No: 12345", "Factura #12345"
     m = re.search(
-        r"(?:Invoice\s*(?:No|Number|#)|N[°º]?\s*(?:de\s*)?Factura|Factura\s*(?:N[°º]|n[°º]))\s*[:#]?\s*([A-Z0-9\-/]+)",
+        r"(?:N[°º.]*\s*(?:de\s*)?factura|Invoice\s*(?:No|Number|#)|Factura\s*(?:N[°º]|n[°º]|#)|N[°º.]*\s*factura)\s*[:#]?\s*([A-Z0-9\-/]+)",
         text,
         re.IGNORECASE,
     )
@@ -272,9 +300,10 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
             m.group(1).strip(), 0.75, method, "regex:invoice_number"
         )
 
-    # Invoice date: ISO or Spanish format.
+    # Invoice date: flexible patterns.
+    # "Fecha de facturación: 02/09/26", "Date: 2026-09-02", "Fecha: 02/09/2026"
     m = re.search(
-        r"(?:Date|Fecha)\s*:\s*(\d{4}-\d{2}-\d{2}|\d{2}[/-]\d{2}[/-]\d{4})",
+        r"(?:Fecha\s*(?:de\s*facturaci[oó]n)?|Date|Fecha\s*factura)\s*[:\-]?\s*(\d{4}-\d{2}-\d{2}|\d{2}[/-]\d{2}[/-]\d{2,4})",
         text,
         re.IGNORECASE,
     )
@@ -283,9 +312,10 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
             m.group(1).strip(), 0.80, method, "regex:date"
         )
 
-    # Total amount: look for "Total: XX.XX" or "Importe Total: XX.XX".
+    # Total amount: flexible patterns.
+    # "Total a pagar 25,06 EUR", "Total: 25.06", "Importe Total: 25,06"
     m = re.search(
-        r"(?:Total|Importe\s*Total|Grand\s*Total)\s*:\s*([\d.,]+)",
+        r"(?:Total\s*(?:a\s*pagar|final|general)?|Importe\s*Total|Grand\s*Total|Total)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
         text,
         re.IGNORECASE,
     )
@@ -294,9 +324,10 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
             m.group(1).strip(), 0.80, method, "regex:total"
         )
 
-    # Base amount.
+    # Base amount: flexible patterns.
+    # "Total (base imponible) 20,71 EUR", "Base: 20.71", "Net Amount: 20,71"
     m = re.search(
-        r"(?:Base|Base\s*Imponible|Net\s*Amount)\s*:\s*([\d.,]+)",
+        r"(?:Base\s*(?:imponible)?|Net\s*Amount|Subtotal|Base)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
         text,
         re.IGNORECASE,
     )
@@ -305,9 +336,10 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
             m.group(1).strip(), 0.75, method, "regex:base"
         )
 
-    # VAT rate.
+    # VAT rate: flexible patterns.
+    # "IVA (21,0 %)", "VAT: 21%", "Tax Rate: 21.0%"
     m = re.search(
-        r"(?:IVA|VAT|Tax\s*Rate)\s*:\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%",
+        r"(?:IVA|VAT|Tax\s*Rate|Tipo\s*IVA)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%",
         text,
         re.IGNORECASE,
     )
@@ -316,9 +348,10 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
             m.group(1).strip(), 0.75, method, "regex:vat_rate"
         )
 
-    # VAT amount.
+    # VAT amount: flexible patterns.
+    # "+ IVA (21,0 %) 4,35 EUR", "VAT: 4.35", "Tax Amount: 4,35"
     m = re.search(
-        r"(?:IVA|VAT|Tax\s*Amount)\s*:\s*([\d.,]+)",
+        r"(?:\+\s*)?(?:IVA|VAT|Tax\s*Amount|Importe\s*IVA)\s*[:\-]?\s*([\d.,]+)\s*(?:EUR|USD|€|\$)?",
         text,
         re.IGNORECASE,
     )
@@ -327,11 +360,18 @@ def extract_pdf_text(content: bytes) -> Dict[str, Any]:
             m.group(1).strip(), 0.75, method, "regex:vat_amount"
         )
 
-    # Currency.
-    m = re.search(r"(?:Currency|Moneda)\s*:\s*([A-Z]{3})", text, re.IGNORECASE)
+    # Currency: flexible patterns.
+    # "EUR", "USD", "€", "$"
+    m = re.search(r"\b(EUR|USD|GBP|MXN|€|\$)\b", text)
     if m:
+        currency = m.group(1)
+        # Normalize symbols to codes.
+        if currency == "€":
+            currency = "EUR"
+        elif currency == "$":
+            currency = "USD"
         fields["currency"] = _make_field(
-            m.group(1).strip(), 0.85, method, "regex:currency"
+            currency, 0.85, method, "regex:currency"
         )
 
     if not fields:
