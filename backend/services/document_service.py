@@ -16,7 +16,7 @@ import os
 import uuid
 from typing import Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
 from backend.config import get_settings
@@ -405,7 +405,7 @@ def delete_document(
 
     # 1. Delete audit events for this document.
     db.execute(
-        AuditEvent.__table__.delete().where(
+        delete(AuditEvent).where(
             AuditEvent.entity_id == document_id,
             AuditEvent.owner_id == owner_id,
         )
@@ -413,7 +413,7 @@ def delete_document(
 
     # 2. Delete duplications involving this document.
     db.execute(
-        Duplication.__table__.delete().where(
+        delete(Duplication).where(
             (Duplication.document_a_id == document_id) |
             (Duplication.document_b_id == document_id),
             Duplication.owner_id == owner_id,
@@ -457,23 +457,23 @@ def delete_document(
             )
             if normalized_value_ids:
                 db.execute(
-                    ValidatedValue.__table__.delete().where(
+                    delete(ValidatedValue).where(
                         ValidatedValue.normalized_value_id.in_(normalized_value_ids),
                     )
                 )
             db.execute(
-                NormalizedValue.__table__.delete().where(
+                delete(NormalizedValue).where(
                     NormalizedValue.extracted_value_id.in_(extracted_value_ids),
                 )
             )
         db.execute(
-            ExtractedValue.__table__.delete().where(
+            delete(ExtractedValue).where(
                 ExtractedValue.extraction_id.in_(extraction_ids),
             )
         )
 
     db.execute(
-        Extraction.__table__.delete().where(
+        delete(Extraction).where(
             Extraction.document_id == document_id,
             Extraction.owner_id == owner_id,
         )
@@ -492,18 +492,18 @@ def delete_document(
     )
     if expense_ids:
         db.execute(
-            ExpenseLine.__table__.delete().where(
+            delete(ExpenseLine).where(
                 ExpenseLine.expense_id.in_(expense_ids),
             )
         )
         # Delete split_expenses links.
         db.execute(
-            SplitExpense.__table__.delete().where(
+            delete(SplitExpense).where(
                 SplitExpense.expense_id.in_(expense_ids),
             )
         )
         db.execute(
-            Expense.__table__.delete().where(
+            delete(Expense).where(
                 Expense.id.in_(expense_ids),
             )
         )
@@ -521,19 +521,19 @@ def delete_document(
     )
     if split_ids:
         db.execute(
-            SplitExpense.__table__.delete().where(
+            delete(SplitExpense).where(
                 SplitExpense.split_id.in_(split_ids),
             )
         )
         db.execute(
-            DocumentSplit.__table__.delete().where(
+            delete(DocumentSplit).where(
                 DocumentSplit.id.in_(split_ids),
             )
         )
 
     # 6. Delete extraction jobs.
     db.execute(
-        ExtractionJob.__table__.delete().where(
+        delete(ExtractionJob).where(
             ExtractionJob.document_id == document_id,
             ExtractionJob.owner_id == owner_id,
         )
