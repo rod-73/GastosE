@@ -300,7 +300,7 @@ def _fail_job(
     failure_code: str,
     failure_reason: str,
     db: DbSession,
-) -> Extraction:
+) -> Optional[Extraction]:
     """Mark a job as failed (or schedule retry).
 
     If attempts < max_attempts: schedule retry with backoff.
@@ -345,20 +345,11 @@ def _fail_job(
     db.commit()
     db.refresh(job)
 
-    # Create a failed extraction record for auditability.
-    extraction = Extraction(
-        id=uuid7(),
-        owner_id=job.owner_id,
-        document_id=job.document_id,
-        method="unknown",
-        state="failed",
-        started_at=now,
-        finished_at=now,
-        failure_reason=failure_reason,
-    )
-    db.add(extraction)
-    db.commit()
-    db.refresh(extraction)
+    # Note: We do NOT create a failed Extraction record because the
+    # method column has a CHECK constraint that only allows valid
+    # extraction methods (xml_schema, pdf_text_rules, ocr, vision_llm).
+    # The job record itself tracks the failure for auditability.
+    extraction = None
 
     # Audit event.
     audit = AuditEvent(

@@ -202,6 +202,8 @@ def upload_document(
     db.refresh(document)
 
     # 11. Process extraction synchronously.
+    # Extraction failures are non-fatal: the document remains uploaded
+    # and the job is marked as failed. The user can retry later.
     try:
         # Process the job directly (sets state to 'running', then processes).
         extraction_service.process_job_direct(job, db)
@@ -213,11 +215,21 @@ def upload_document(
         )
     except Exception as e:
         logger.error("Extraction failed for document %s: %s", document.id, e)
-        # Update job state to failed.
-        job.state = "failed"
-        job.failure_code = "extraction_error"
-        job.failure_reason = str(e)
-        db.commit()
+        # Rollback the failed transaction and mark job as failed.
+        db.rollback()
+        # Re-fetch the job after rollback.
+        job = (
+            db.execute(
+                select(ExtractionJob).where(ExtractionJob.id == job.id)
+            )
+            .scalars()
+            .first()
+        )
+        if job:
+            job.state = "failed"
+            job.failure_code = "extraction_error"
+            job.failure_reason = str(e)[:2000]  # Truncate long errors
+            db.commit()
 
     db.refresh(document)
     return document
