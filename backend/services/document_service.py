@@ -206,7 +206,7 @@ def upload_document(
     # and the job is marked as failed. The user can retry later.
     try:
         # Process the job directly (sets state to 'running', then processes).
-        extraction_service.process_job_direct(job, db)
+        extraction_service.process_job_direct(job, db, actor_id=session.user_id)
         extraction_service.process_job(job, db)
         logger.info(
             "Extraction completed for document %s (job %s)",

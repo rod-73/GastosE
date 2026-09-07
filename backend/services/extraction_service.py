@@ -103,31 +103,25 @@ def claim_job(
     return job
 
 
-def process_job_direct(job: ExtractionJob, db: DbSession) -> Extraction:
+def process_job_direct(
+    job: ExtractionJob, db: DbSession, actor_id: Optional[uuid.UUID] = None
+) -> None:
     """Process a specific extraction job directly (synchronous, no claim).
 
     This is used when processing jobs inline (e.g., during upload) rather
     than through the worker claim/process flow.
 
-    Steps:
-    1. Set job to 'running' state.
-    2. Check idempotency: if a completed extraction exists, reuse it.
-    3. Verify document integrity.
-    4. Read document content from filesystem.
-    5. Select and execute extraction method.
-    6. Validate output.
-    7. Persist results.
-    8. Update job state.
+    Args:
+        job: The extraction job to process.
+        db: Database session.
+        actor_id: The user ID to set as claimed_by (for audit trail).
 
-    Returns the Extraction record.
+    Returns None (the actual processing is done by process_job).
     """
-    owner_id = job.owner_id
-    document_id = job.document_id
-
     # Set job to running.
     now = datetime.now(timezone.utc)
     job.state = "running"
-    job.claimed_by = job.claimed_by  # Keep existing or None
+    job.claimed_by = actor_id
     job.claimed_at = now
     job.lease_expires_at = now + timedelta(minutes=LEASE_DURATION_MINUTES)
     job.attempts = job.attempts + 1
@@ -274,21 +268,22 @@ def process_job(job: ExtractionJob, db: DbSession) -> Extraction:
     except Exception:
         logger.exception("Duplication detection failed (non-blocking)")
 
-    # Audit event.
-    audit = AuditEvent(
-        id=uuid7(),
-        owner_id=owner_id,
-        entity_type="extraction",
-        entity_id=extraction.id,
-        action="extraction.completed",
-        actor=job.claimed_by or uuid.UUID(int=0),
-        after_data={
-            "method": method_name,
-            "fields_extracted": len(result.fields),
-            "document_id": str(document_id),
-        },
-    )
-    db.add(audit)
+    # Audit event (only if we have a valid actor).
+    if job.claimed_by:
+        audit = AuditEvent(
+            id=uuid7(),
+            owner_id=job.owner_id,
+            entity_type="extraction",
+            entity_id=extraction.id,
+            action="extraction.completed",
+            actor=job.claimed_by,
+            after_data={
+                "method": method_name,
+                "fields_extracted": len(result.fields),
+                "document_id": str(document_id),
+            },
+        )
+        db.add(audit)
 
     db.commit()
     db.refresh(extraction)
@@ -351,23 +346,24 @@ def _fail_job(
     # The job record itself tracks the failure for auditability.
     extraction = None
 
-    # Audit event.
-    audit = AuditEvent(
-        id=uuid7(),
-        owner_id=job.owner_id,
-        entity_type="extraction_job",
-        entity_id=job.id,
-        action="extraction.failed",
-        actor=job.claimed_by or uuid.UUID(int=0),
-        after_data={
-            "failure_code": failure_code,
-            "failure_reason": failure_reason,
-            "attempts": job.attempts,
-            "max_attempts": job.max_attempts,
-        },
-    )
-    db.add(audit)
-    db.commit()
+    # Audit event (only if we have a valid actor).
+    if job.claimed_by:
+        audit = AuditEvent(
+            id=uuid7(),
+            owner_id=job.owner_id,
+            entity_type="extraction_job",
+            entity_id=job.id,
+            action="extraction.failed",
+            actor=job.claimed_by,
+            after_data={
+                "failure_code": failure_code,
+                "failure_reason": failure_reason,
+                "attempts": job.attempts,
+                "max_attempts": job.max_attempts,
+            },
+        )
+        db.add(audit)
+        db.commit()
 
     return extraction
 
