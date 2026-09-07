@@ -69,6 +69,7 @@ Rules:
 - If VAT is 0%%, set vat_rate to "0" and vat_amount to "0".
 - If base amount is not stated but VAT is 0%%, base_amount equals total_amount.
 - Currency: ISO-4217 code (EUR, USD, GBP, etc.).
+- Extract values exactly as they appear in the document (do not convert formats).
 
 Return a JSON object with exactly these keys: {json_keys}
 
@@ -369,8 +370,15 @@ def merge_llm_results(
 ) -> Dict[str, Any]:
     """Merge LLM results into the raw extraction output.
 
-    Only adds fields that are NOT already present with valid values.
-    LLM fields get distinct provenance and lower confidence.
+    Reconciliation strategy:
+    - If the deterministic value is valid (parseable, non-junk): KEEP it.
+      The LLM never overrides a valid deterministic value.
+    - If the deterministic value is invalid/junk/missing: USE the LLM value.
+    - LLM fields get distinct provenance and lower confidence (0.55).
+    - Deterministic fields retain their original provenance and confidence.
+
+    This ensures we never lose a good deterministic value while filling
+    gaps with LLM output.
 
     Args:
         raw_output: The existing extraction output (from regex/parser).
@@ -383,14 +391,25 @@ def merge_llm_results(
         return raw_output
 
     for field_name, value in llm_result.fields.items():
-        # Skip if field already has a valid value.
+        if field_name not in VALID_FIELDS:
+            continue
+
+        # Check if the existing deterministic value is valid.
         if field_name in raw_output:
             existing = raw_output[field_name]
             if isinstance(existing, dict):
                 existing_raw = existing.get("raw_value", "")
-                if existing_raw and existing_raw.strip() not in (".", "-", "N/A", "null"):
-                    continue
+                if isinstance(existing_raw, str) and existing_raw.strip():
+                    # Use the quality gate to check parseability.
+                    from backend.services.extraction_quality import (
+                        _check_field_quality,
+                    )
+                    fq = _check_field_quality(field_name, existing_raw)
+                    if fq.present and fq.parseable:
+                        # Deterministic value is valid: KEEP it.
+                        continue
 
+        # Use LLM value (either field was missing, junk, or unparseable).
         raw_output[field_name] = {
             "raw_value": value,
             "confidence": 0.55,  # Lower than regex (0.6-0.85)

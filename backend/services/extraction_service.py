@@ -211,32 +211,44 @@ def process_job(job: ExtractionJob, db: DbSession) -> Extraction:
             db,
         )
 
-    # 4.5. LLM fallback (ADR-0010): if deterministic extraction is incomplete,
-    # invoke LLM to fill missing fields. Never breaks the pipeline.
+    # 4.5. Quality gate + LLM fallback (ADR-0010).
+    # The quality gate evaluates the deterministic result. If insufficient,
+    # the LLM is invoked with the full document context to extract the
+    # complete set of fields. Reconciliation preserves valid deterministic
+    # values. Never breaks the pipeline.
     if isinstance(raw_output, dict) and "_error" not in raw_output:
+        from backend.services.extraction_quality import should_invoke_llm
         from backend.services.llm_extraction import (
-            should_use_llm,
-            find_missing_fields,
+            is_llm_configured,
             extract_with_llm,
             merge_llm_results,
         )
 
-        if should_use_llm(raw_output):
-            missing = find_missing_fields(raw_output)
+        llm_configured = is_llm_configured()
+        invoke, quality_report, fields_to_extract = should_invoke_llm(
+            raw_output, llm_configured
+        )
+
+        if invoke:
             logger.info(
-                "Deterministic extraction incomplete (missing: %s); trying LLM fallback",
-                missing,
+                "Quality gate: deterministic extraction insufficient "
+                "(missing: %s, invalid: %s, arithmetic: %s); "
+                "invoking LLM for fields: %s",
+                quality_report.missing_fields,
+                quality_report.invalid_fields,
+                quality_report.arithmetic_inconsistent,
+                fields_to_extract,
             )
 
             # Extract text from document for LLM input.
             invoice_text = _get_document_text(content, job.format_detected)
 
             if invoice_text:
-                llm_result = extract_with_llm(invoice_text, missing)
+                llm_result = extract_with_llm(invoice_text, fields_to_extract)
                 if llm_result.success and llm_result.fields:
                     raw_output = merge_llm_results(raw_output, llm_result)
                     logger.info(
-                        "LLM fallback added %d fields: %s (model: %s)",
+                        "LLM fallback reconciled %d fields: %s (model: %s)",
                         llm_result.field_count,
                         list(llm_result.fields.keys()),
                         llm_result.model,
