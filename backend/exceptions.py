@@ -86,3 +86,10 @@ class ConflictException(GastosEException):
 
     def __init__(self, message: str) -> None:
         super().__init__("conflict.state", message, 409)
+
+
+class ValidationException(GastosEException):
+    """400: the request failed validation."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("validation.failed", message, 400)

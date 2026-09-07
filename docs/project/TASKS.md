@@ -32,6 +32,13 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
 | V7S1-001 | Implementar V7-S1: registro de auditoría append-only | director | ACCEPTED | main | 2026-09-04 | 2 endpoints: GET /audit-events (listado con filtros), GET /audit-events/{id} (detalle). NFR-1, INV-10. Append-only (sin UPDATE/DELETE). Aislamiento por org. 270 tests passing. Quality gate superado |
 | V8S1-001 | Implementar V8-S1: autenticación (login/logout, sesiones) | director | ACCEPTED | main | 2026-09-04 | 3 endpoints: GET /sessions (listado), POST /sessions/{id}/revoke, POST /sessions/revoke-all. ADR-0009: token opaco + sesión server-side con revocación. NFR-7. Expiración y revocación verificadas. Aislamiento por usuario. 283 tests passing. Quality gate superado |
 | V8S2-001 | Implementar V8-S2: autorización por rol + object-level authorization | director | ACCEPTED | main | 2026-09-04 | Autorización por rol (reader, reviewer, approver, admin) + object-level authorization (filtro por owner_id en todas las queries). NFR-7. Test de aislamiento: usuario A no ve recurso de B (404). Corrección en routers/suppliers.py: ValueError "not found" -> 404 (no 409). 296 tests passing. Quality gate superado |
+| PHASE3-001 | Gap analysis: comparar implementación vs. diseño documentado | director | ACCEPTED | main | 2026-09-07 | Faltantes: rate limiting, manual corrections (E14), payments (E12), document splits (E19), frontend, workers separados, deployment. Parcial: expense state transitions. |
+| PHASE3-002 | Implementar rate limiting middleware (5 login/min/IP, 100 API/min/user) | director | ACCEPTED | main | 2026-09-07 | Middleware in-memory. 5 tests passing. |
+| PHASE3-003 | Implementar manual_corrections model + migration + service (E14, INV-7) | director | ACCEPTED | main | 2026-09-07 | Modelo ORM + migración 0007 + servicio + router. 7 tests passing. |
+| PHASE3-004 | Implementar payments model + migration (E12, VR-ARITH-5) | director | ACCEPTED | main | 2026-09-07 | Modelo ORM + migración 0008 + servicio + router. V1: solo pago único. 9 tests passing. |
+| PHASE3-005 | Implementar document_splits + split_expenses models + migration (E19, INV-4) | director | ACCEPTED | main | 2026-09-07 | Modelos ORM + migración 0009 + servicio + router. 10 tests passing. |
+| PHASE3-006 | Crear frontend skeleton (upload, review, acceptance UI) | director | ACCEPTED | main | 2026-09-07 | HTML/CSS/JS en frontend/. Upload, listado de documentos/gastos/proveedores. |
+| PHASE3-007 | Crear deployment artifacts (Dockerfile, docker-compose.yml) | director | ACCEPTED | main | 2026-09-07 | Dockerfile, docker-compose.yml, nginx.conf, .env.example. |
 
 ## Historial
 
@@ -176,10 +183,20 @@ Solo el director transita estados y declara ACCEPTED/MERGED/DONE.
     (revocar todas las sesiones del usuario). ADR-0009: token opaco + sesión
     server-side con revocación. NFR-7. Expiración y revocación verificadas.
     Aislamiento por usuario. 283 tests passing. Quality gate superado.
-- 2026-09-04 — director: V8S2-001 (V8-S2: autorización por rol + object-level
+ - 2026-09-04 — director: V8S2-001 (V8-S2: autorización por rol + object-level
     authorization) -> ACCEPTED. Autorización por rol (reader, reviewer,
     approver, admin) + object-level authorization (filtro por owner_id en
     todas las queries). NFR-7. Test de aislamiento: usuario A no ve recurso
     de B (404). Corrección en routers/suppliers.py: ValueError "not found"
     -> 404 (no 409). 296 tests passing. Quality gate superado. **Phase 2
     COMPLETADA.**
+ - 2026-09-07 — director: PHASE3-001 (gap analysis) -> ACCEPTED. Comparación
+    entre implementación actual y diseño documentado. Faltantes: rate
+    limiting, manual corrections (E14), payments (E12), document splits
+    (E19), frontend, workers separados, deployment. Tareas PHASE3-002..007
+    creadas (PROPOSED). Phase 3 iniciada.
+ - 2026-09-07 — director: PHASE3-002..007 -> ACCEPTED. Implementación
+    completada: rate limiting middleware (5 tests), manual corrections
+    (E14, 7 tests), payments (E12, 9 tests), document splits (E19, 10 tests),
+    frontend skeleton (HTML/CSS/JS), deployment artifacts (Dockerfile,
+    docker-compose.yml, nginx.conf). 327 tests passing. **Phase 3 COMPLETADA.**

@@ -1,8 +1,8 @@
 # STATE — GastosE
 
-- **Phase**: 2 — Implementation (V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 + V4-S1..S4 + V5-S1 + V5-S2 + V6-S1 + V6-S2 + V7-S1 + V8-S1 + V8-S2 completadas)
+- **Phase**: 3 — v1.0 Production Ready (COMPLETADA)
 - **Milestone**: M1.2 — Baseline operativo vigente del runtime multiagente (ADR-0013). M1.3 (circuit breaker) = experimento NO OPERATIVO, descartado para uso (2026-09-04)
-- **Updated**: 2026-09-04 (por director: V8-S2 implementada. Autorización por rol + aislamiento object-level. 296 tests passing. Quality gate superado. Phase 2 COMPLETADA.)
+- **Updated**: 2026-09-07 (por director: Phase 3 COMPLETADA. Rate limiting, manual corrections (E14), payments (E12), document splits (E19), frontend skeleton, deployment artifacts implementados. 327 tests passing.)
 
 ## Current architecture
 
@@ -142,80 +142,30 @@
 | C4 | Aclarar ciclo de vida A (estados derivados del gasto) | HECHO (docs/requirements/04-lifecycle.md) |
 | C5 | Corregir enum ValidationOutcome (añadir failed/warning) | HECHO (openapi.yaml) |
 
+## Gap Analysis (2026-09-07) — RESUELTO
+
+Comparación entre implementación actual y diseño documentado (docs/design/,
+docs/persistence/):
+
+| Componente | Estado | Notas |
+|---|---|---|
+| Rate limiting | **IMPLEMENTADO** | Middleware in-memory (5 login/min/IP, 100 API/min/user). Sin Redis en V1. |
+| Manual corrections (E14) | **IMPLEMENTADO** | Modelo ORM + migración 0007 + servicio + router. Append-only, INV-7. |
+| Payments (E12) | **IMPLEMENTADO** | Modelo ORM + migración 0008 + servicio + router. VR-ARITH-5. V1: solo pago único. |
+| Document splits (E19) | **IMPLEMENTADO** | Modelos ORM + migración 0009 + servicio + router. INV-4. |
+| Frontend | **IMPLEMENTADO** | Skeleton HTML/CSS/JS en frontend/. Upload, listado de documentos/gastos/proveedores. |
+| Workers separados | **NO IMPLEMENTADO** | Extracción en backend/services/extraction_service.py expuesta vía router worker.py. Sin directorio workers/. (No crítico para v1.0) |
+| Deployment | **IMPLEMENTADO** | Dockerfile, docker-compose.yml, nginx.conf, .env.example. |
+| Expense state transitions | **COMPLETO** | draft, under_review, validation_error, duplicate, ready_for_acceptance, accepted, rejected, voided. Transiciones manejadas en review_service.py y duplication_service.py. |
+
 ## Next gate
 
 - **M1.2 = baseline operativo vigente** (2026-09-03, ADR-0013).
 - **M1.3 = experimento NO OPERATIVO / descartado para uso** (2026-09-04).
-- **V1-S1 COMPLETADA** (2026-09-04): implementación, tests, migraciones,
-  security invariants verificados. Quality gate superado.
-- **V1-S2 COMPLETADA** (2026-09-04): verify-fingerprint + content download.
-  47 tests passing. Quality gate superado.
-- **V2-S1 COMPLETADA** (2026-09-04): worker de extracción (claim, process,
-  reap). Cascada determinística XML/PDF text. Validación schema estricto.
-  Persistencia E2+E3. Retry con backoff. Lease reaping. 77 tests passing.
-  Quality gate superado.
-- **V2-S2 COMPLETADA** (2026-09-04): retry de extracción
-  (POST /documents/{id}/extractions/retry), listado
-  (GET /documents/{id}/extractions), detalle
-  (GET /extractions/{id}). 90 tests passing. Quality gate superado.
-- **V3-S1 COMPLETADA** (2026-09-04): normalización determinística
-  (POST /extractions/{id}/normalize, GET /extractions/{id}/normalized-values).
-  Migración 0004 (normalized_values E4). Normalización: currency (ISO-4217),
-  amount (decimal exacto), date (ISO-8601), NIF/CIF (check digit), VAT rate
-  (0/4/10/21). Provenance INV-10. Idempotencia. Aislamiento por org.
-  138 tests passing. Quality gate superado.
-- **V3-S2 COMPLETADA** (2026-09-04): validación determinística
-  (POST /extractions/{id}/validate, GET /extractions/{id}/validated-values).
-  Migración 0005 (validated_values E5). VR rules: VR-ARITH-1 (identidad total),
-  VR-SCHEMA-2 (campos obligatorios), VR-NORM-1..4 (currency, date, NIF, VAT),
-  VR-BIZ-5/8/9 (moneda única, fecha coherente, importe razonable).
-  Resultados: passed/failed/warning. Provenance INV-10. Idempotencia.
-  Aislamiento por org. 171 tests passing. Quality gate superado.
-- **V3-S3 COMPLETADA** (2026-09-04): creación de gasto E6 a partir de
-  valores validados (POST /extractions/{id}/expenses, GET /expenses/{id},
-  GET /expenses). Migración 0006 (expenses E6, expense_lines E7, tax_lines E8).
-  INV-1 (total == base + IVA - retenciones), INV-3 (document_id NOT NULL),
-  INV-13 (moneda única). Estado `draft`. Idempotencia. Aislamiento por org.
-  Modelos ORM para catálogos (Supplier, TaxRate, Currency, Category,
-  PaymentMethod) añadidos. 182 tests passing. Quality gate superado.
-- **V4-S1..S4 COMPLETADAS** (2026-09-04): revisión, decisiones, aceptación,
-  rechazo, anulación (GET /expenses/{id}/review, POST /expenses/{id}/review/decisions,
-  POST /expenses/{id}/accept, POST /expenses/{id}/reject, POST /expenses/{id}/void).
-  Vista de cinco niveles (extraído, normalizado, validado, aceptado, documento).
-  Corrección manual auditada (E14, INV-7). Aceptación con revalidación INV-1
-  y bloqueo por duplicación probable (INV-6). Rechazo terminal. Anulación solo
-  de gastos accepted. Auditoría en todas las acciones (ADR-0012).
-  199 tests passing. Quality gate superado.
-- **V5-S1 + V5-S2 COMPLETADAS** (2026-09-04): detección de duplicados por
-  clave lógica (DUP-2/3) al completar extracción, listado y consulta de
-  duplicaciones (GET /duplications, GET /duplications/{id}), resolución
-  humana auditada (POST /duplications/{id}/resolve). Clave:
-  (proveedor, número, fecha, importe). DUP-9 (fingerprint prioridad),
-  DUP-10 (múltiples duplicaciones). Resolución terminal (confirmed /
-  not_duplicate). Bloqueo de aceptación por duplicación probable (INV-6).
-  218 tests passing. Quality gate superado.
-- **V6-S1 COMPLETADA** (2026-09-04): CRUD de proveedores (POST /suppliers,
-  GET /suppliers, GET /suppliers/{id}, PUT /suppliers/{id},
-  POST /suppliers/{id}/deactivate). NIF/CIF validado (VR-NORM-3). Búsqueda por
-  NIF/nombre. Estado active/inactive. Con gastos aceptados no se elimina, solo
-  inactive. Auditoría. Aislamiento por org. 235 tests passing. Quality gate
-  superado.
-- **V6-S2 COMPLETADA** (2026-09-04): CRUD de catálogos (categorías, métodos de
-  pago, tipos impositivos, monedas). 17 endpoints. FR-CAT-1..3. Auditoría.
-  Aislamiento por org. 260 tests passing. Quality gate superado.
-- **V7-S1 COMPLETADA** (2026-09-04): registro de auditoría append-only
-  (GET /audit-events, GET /audit-events/{id}). NFR-1, INV-10. Sin
-  UPDATE/DELETE. Aislamiento por org. 270 tests passing. Quality gate
-  superado.
-- **V8-S1 COMPLETADA** (2026-09-04): autenticación (login/logout,
-  sesiones/tokens con expiración y revocación). ADR-0009. NFR-7.
-  283 tests passing. Quality gate superado.
-- **V8-S2 COMPLETADA** (2026-09-04): autorización por rol (reader, reviewer,
-  approver, admin) + object-level authorization (filtro por owner_id en todas
-  las queries). NFR-7. Test de aislamiento: usuario A no ve recurso de B (404).
-  296 tests passing. Quality gate superado.
-- **Phase 2 COMPLETADA** (2026-09-04): todas las vertical slices implementadas
-  y ACCEPTED.
-- Phase 1 COMPLETADA (M1 cerrado).
-- Phase 2 COMPLETADA: V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 + V3-S2 + V3-S3 +
-  V4-S1..S4 + V5-S1 + V5-S2 + V6-S1 + V6-S2 + V7-S1 + V8-S1 + V8-S2 ACCEPTED.
+- **Phase 2 COMPLETADA** (2026-09-04): V1-S1 + V1-S2 + V2-S1 + V2-S2 + V3-S1 +
+  V3-S2 + V3-S3 + V4-S1..S4 + V5-S1 + V5-S2 + V6-S1 + V6-S2 + V7-S1 + V8-S1 +
+  V8-S2 ACCEPTED. 296 tests passing.
+- **Phase 3 COMPLETADA** (2026-09-07): implementación de features faltantes para
+  v1.0 production ready. Rate limiting, manual corrections (E14), payments (E12),
+  document splits (E19), frontend skeleton, deployment artifacts. 327 tests passing.
+  Workers separados no implementados (no crítico para v1.0).

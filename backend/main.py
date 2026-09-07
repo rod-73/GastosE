@@ -17,12 +17,16 @@ from fastapi.responses import JSONResponse
 
 from backend.exceptions import GastosEException
 from backend.middleware.auth import auth_middleware
+from backend.middleware.rate_limit import rate_limit_middleware
 from backend.routers import auth as auth_router
 from backend.routers import documents as documents_router
 from backend.routers import expenses as expenses_router
 from backend.routers import extractions as extractions_router
 from backend.routers import audit as audit_router
 from backend.routers import catalogs as catalogs_router
+from backend.routers import manual_corrections as manual_corrections_router
+from backend.routers import document_splits as document_splits_router
+from backend.routers import payments as payments_router
 from backend.routers import duplications as duplications_router
 from backend.routers import review as review_router
 from backend.routers import sessions as sessions_router
@@ -48,6 +52,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Rate limiting middleware (must run before auth for login limiting).
+    app.middleware("http")(rate_limit_middleware)
 
     # Authentication middleware (opaque bearer token).
     app.middleware("http")(auth_middleware)
@@ -96,6 +103,9 @@ def create_app() -> FastAPI:
     app.include_router(review_router.router)
     app.include_router(suppliers_router.router)
     app.include_router(catalogs_router.router)
+    app.include_router(manual_corrections_router.router)
+    app.include_router(payments_router.router)
+    app.include_router(document_splits_router.router)
     app.include_router(audit_router.router)
     app.include_router(sessions_router.router)
 

@@ -33,6 +33,15 @@ def _isolate_storage(tmp_path, monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiters():
+    """Reset rate limiters before each test."""
+    from backend.middleware.rate_limit import reset_rate_limiters
+    reset_rate_limiters()
+    yield
+    reset_rate_limiters()
+
+
 @pytest.fixture()
 def db_engine():
     """Create an in-memory SQLite engine with all tables."""

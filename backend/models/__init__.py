@@ -13,11 +13,14 @@ from backend.models.catalog import (
 )
 from backend.models.duplication import Duplication
 from backend.models.document import SourceDocument
+from backend.models.document_split import DocumentSplit, SplitExpense
 from backend.models.expense import Expense, ExpenseLine, TaxLine
 from backend.models.extraction import Extraction, ExtractedValue
 from backend.models.extraction_job import ExtractionJob
 from backend.models.idempotency_key import IdempotencyKey
+from backend.models.manual_correction import ManualCorrection
 from backend.models.normalized_value import NormalizedValue
+from backend.models.payment import Payment
 from backend.models.organization import Organization
 from backend.models.session import Session
 from backend.models.user import User
@@ -27,6 +30,7 @@ __all__ = [
     "AuditEvent",
     "Category",
     "Currency",
+    "DocumentSplit",
     "Duplication",
     "Expense",
     "ExpenseLine",
@@ -34,11 +38,14 @@ __all__ = [
     "ExtractionJob",
     "ExtractedValue",
     "IdempotencyKey",
+    "ManualCorrection",
     "NormalizedValue",
+    "Payment",
     "Organization",
     "PaymentMethod",
     "Session",
     "SourceDocument",
+    "SplitExpense",
     "Supplier",
     "TaxLine",
     "TaxRate",
