@@ -38,6 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             await api.login(username, password);
             localStorage.setItem('gastose_token', api.getToken());
+            loginError.style.display = 'none';
+            loginError.textContent = '';
             showApp();
             loadDocuments();
             loadExpenses();
@@ -115,6 +117,12 @@ async function loadDocuments() {
             </li>
         `).join('');
     } catch (error) {
+        if (error.message.includes('login again')) {
+            showLogin();
+            loginError.textContent = error.message;
+            loginError.style.display = 'block';
+            return;
+        }
         console.error('Error loading documents:', error);
     }
 }
@@ -131,6 +139,12 @@ async function loadExpenses() {
             </li>
         `).join('');
     } catch (error) {
+        if (error.message.includes('login again')) {
+            showLogin();
+            loginError.textContent = error.message;
+            loginError.style.display = 'block';
+            return;
+        }
         console.error('Error loading expenses:', error);
     }
 }
@@ -146,6 +160,12 @@ async function loadSuppliers() {
             </li>
         `).join('');
     } catch (error) {
+        if (error.message.includes('login again')) {
+            showLogin();
+            loginError.textContent = error.message;
+            loginError.style.display = 'block';
+            return;
+        }
         console.error('Error loading suppliers:', error);
     }
 }

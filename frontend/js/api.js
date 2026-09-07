@@ -36,6 +36,14 @@ class GastosEAPI {
 
         const response = await fetch(`${API_BASE}${path}`, options);
 
+        // Token expired/invalid: clear and force re-login
+        if (response.status === 401) {
+            this.token = null;
+            localStorage.removeItem('gastose_token');
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || 'Session expired. Please login again.');
+        }
+
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
             throw new Error(error.detail || `HTTP ${response.status}`);
