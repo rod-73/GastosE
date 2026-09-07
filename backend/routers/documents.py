@@ -131,6 +131,47 @@ async def upload_document(
     return body
 
 
+@router.get("", response_model=dict)
+def list_documents(
+    session: Session = Depends(get_session),
+    db: DbSession = Depends(get_db),
+) -> dict:
+    """List documents for the caller's organization (newest first)."""
+    docs = (
+        db.execute(
+            select(SourceDocument)
+            .where(SourceDocument.owner_id == session.organization_id)
+            .order_by(SourceDocument.uploaded_at.desc())
+            .limit(100)
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "count": len(docs),
+        "documents": [
+            DocumentResponse(
+                id=d.id,
+                owner_id=d.owner_id,
+                safe_name=d.safe_name,
+                original_filename=d.original_filename,
+                fingerprint_sha256=d.fingerprint_sha256,
+                doc_type=d.doc_type,
+                format_detected=d.format_detected,
+                size_bytes=d.size_bytes,
+                page_count=d.page_count,
+                uploaded_by=d.uploaded_by,
+                uploaded_at=d.uploaded_at,
+                state=d.state,
+                failure_reason=d.failure_reason,
+                created_at=d.created_at,
+                updated_at=d.updated_at,
+            )
+            for d in docs
+        ],
+    }
+
+
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: uuid.UUID,

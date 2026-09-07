@@ -107,7 +107,8 @@ function showApp() {
 
 async function loadDocuments() {
     try {
-        const docs = await api.listDocuments();
+        const data = await api.listDocuments();
+        const docs = data.documents || data;
         const ul = document.getElementById('documents-ul');
         ul.innerHTML = docs.map(doc => `
             <li>
@@ -115,7 +116,7 @@ async function loadDocuments() {
                 <span class="badge badge-${doc.state}">${doc.state}</span>
                 <small>${doc.format_detected} - ${new Date(doc.uploaded_at).toLocaleDateString()}</small>
             </li>
-        `).join('');
+        `).join('') || '<li><em>Sin documentos</em></li>';
     } catch (error) {
         if (error.message.includes('login again')) {
             showLogin();
@@ -129,7 +130,8 @@ async function loadDocuments() {
 
 async function loadExpenses() {
     try {
-        const expenses = await api.listExpenses();
+        const data = await api.listExpenses();
+        const expenses = data.expenses || data;
         const ul = document.getElementById('expenses-ul');
         ul.innerHTML = expenses.map(exp => `
             <li>
@@ -137,7 +139,7 @@ async function loadExpenses() {
                 <span class="badge badge-${exp.state}">${exp.state}</span>
                 <small>${exp.currency} ${exp.total}</small>
             </li>
-        `).join('');
+        `).join('') || '<li><em>Sin gastos</em></li>';
     } catch (error) {
         if (error.message.includes('login again')) {
             showLogin();
@@ -151,14 +153,15 @@ async function loadExpenses() {
 
 async function loadSuppliers() {
     try {
-        const suppliers = await api.listSuppliers();
+        const data = await api.listSuppliers();
+        const suppliers = data.suppliers || data;
         const ul = document.getElementById('suppliers-ul');
         ul.innerHTML = suppliers.map(sup => `
             <li>
                 <strong>${sup.name}</strong>
                 <small>${sup.nif || ''}</small>
             </li>
-        `).join('');
+        `).join('') || '<li><em>Sin proveedores</em></li>';
     } catch (error) {
         if (error.message.includes('login again')) {
             showLogin();
