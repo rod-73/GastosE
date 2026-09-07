@@ -127,20 +127,26 @@ def normalize_date(raw: str) -> Tuple[Optional[str], str, Optional[str]]:
         except ValueError:
             pass
 
-    # Spanish format: DD/MM/YYYY or DD-MM-YYYY.
-    m = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$", raw)
+    # Spanish format: DD/MM/YYYY or DD-MM-YYYY (year can be 2 or 4 digits).
+    m = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$", raw)
     if m:
         day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        # Handle 2-digit year.
+        if year < 100:
+            year += 2000
         try:
             dt = datetime(year, month, day)
             return dt.strftime("%Y-%m-%d"), "date.es_format", None
         except ValueError:
             return None, "date.iso8601", f"Invalid date: {raw!r}"
 
-    # US format: MM/DD/YYYY.
-    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", raw)
+    # US format: MM/DD/YYYY (year can be 2 or 4 digits).
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{2,4})$", raw)
     if m:
         month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        # Handle 2-digit year.
+        if year < 100:
+            year += 2000
         try:
             dt = datetime(year, month, day)
             return dt.strftime("%Y-%m-%d"), "date.us_format", None
